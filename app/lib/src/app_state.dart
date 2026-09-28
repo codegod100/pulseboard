@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'api/client.dart';
 import 'models/models.dart';
+import 'platform/sign_in.dart';
 
 /// Where the reader is. Override at build time:
 ///   flutter run --dart-define=PULSEBOARD_BASE_URL=http://10.0.2.2:8080
@@ -38,17 +38,15 @@ class AppState extends ChangeNotifier {
               onUnauthorized: kIsWeb ? _signInAgain : null,
             );
 
-  static bool _signingIn = false;
-
   /// The session cookie is gone or expired, so every request will keep
   /// failing. The reader serves the login page, and the callback sets a new
-  /// cookie and returns to the app; several requests fail together, so only
-  /// the first one navigates.
-  static void _signInAgain() {
-    if (_signingIn) return;
-    _signingIn = true;
-    launchUrl(Uri.base.resolve('/auth/login'), webOnlyWindowName: '_self');
-  }
+  /// cookie and returns to the app.
+  ///
+  /// There is no "already navigating" latch: several requests failing
+  /// together all assign the same URL, which is harmless, whereas a latch
+  /// that outlives a navigation that did not happen (or a page restored from
+  /// the back/forward cache) silently swallows every later 401.
+  static void _signInAgain() => goToSignIn();
 
   final PulseboardClient client;
 
