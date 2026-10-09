@@ -203,6 +203,39 @@ void main() {
     expect(find.text('New article'), findsOneWidget);
   });
 
+  testWidgets('a red line separates freshly fetched articles', (tester) async {
+    Map<String, Object?> article(int id, String title) => {
+          'id': id,
+          'feed_url': 'https://a.test/feed',
+          'feed_title': 'Feed A',
+          'title': title,
+          'url': 'https://a.test/$id',
+          'author': '',
+          'summary': '',
+          'content': '',
+          'published': '2026-09-2${id}T10:00:00Z',
+          'is_read': false,
+        };
+    final divider = find.byKey(const ValueKey('new-articles-divider'));
+    final articles = [article(1, 'Old article')];
+    await pump(tester, articles: articles);
+    expect(divider, findsNothing);
+
+    articles.insert(0, article(2, 'New article'));
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(divider, findsOneWidget);
+    final y = tester.getTopLeft(divider).dy;
+    expect(tester.getTopLeft(find.text('New article')).dy, lessThan(y));
+    expect(tester.getTopLeft(find.text('Old article')).dy, greaterThan(y));
+
+    // Nothing new on the next fetch, so the line goes away.
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    expect(divider, findsNothing);
+  });
+
   testWidgets('feed management exposes add and removal controls',
       (tester) async {
     await pump(tester);

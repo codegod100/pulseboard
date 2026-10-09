@@ -29,6 +29,13 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
   /// without refetching the list.
   final Map<int, Article> _patched = {};
 
+  /// Ids in the list the reader is looking at, so a fetch can tell which
+  /// rows are new. Null until a list has loaded for the current filters.
+  Set<int>? _shownIds;
+
+  /// Where the red "new since last fetch" line goes: before this row.
+  int? _newBoundary;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -36,17 +43,13 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
     if (_articlesRevision == revision) return;
     _articlesRevision = revision;
     _patched.clear();
-    _future = AppScope.read(context).client.articles(
-      status: _status,
-      feedUrl: widget.feed.feedUrl,
-      search: _search,
-    );
+    _future = _fetch(markNew: true);
   }
 
   @override
   void didUpdateWidget(ArticlesScreen old) {
     super.didUpdateWidget(old);
-    if (old.feed.feedUrl != widget.feed.feedUrl) _load();
+    if (old.feed.feedUrl != widget.feed.feedUrl) _load(markNew: false);
   }
 
   @override
@@ -55,14 +58,30 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
     super.dispose();
   }
 
-  void _load() {
+  /// Fetches the list. With [markNew], rows that were not on screen before
+  /// are set apart from the ones the reader has already seen; otherwise the
+  /// filters changed and every row counts as already seen.
+  Future<List<Article>> _fetch({required bool markNew}) async {
+    final previous = markNew ? _shownIds : null;
+    final items = await AppScope.read(context).client.articles(
+          status: _status,
+          feedUrl: widget.feed.feedUrl,
+          search: _search,
+        );
+    _shownIds = {for (final a in items) a.id};
+    _newBoundary = null;
+    if (previous != null) {
+      final firstSeen = items.indexWhere((a) => previous.contains(a.id));
+      // Only draw the line when something new sits above something seen.
+      if (firstSeen > 0) _newBoundary = firstSeen;
+    }
+    return items;
+  }
+
+  void _load({required bool markNew}) {
     setState(() {
       _patched.clear();
-      _future = AppScope.read(context).client.articles(
-            status: _status,
-            feedUrl: widget.feed.feedUrl,
-            search: _search,
-          );
+      _future = _fetch(markNew: markNew);
     });
   }
 
@@ -131,13 +150,13 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
                             onPressed: () {
                               _searchController.clear();
                               _search = '';
-                              _load();
+                              _load(markNew: false);
                             },
                           ),
                   ),
                   onSubmitted: (v) {
                     _search = v.trim();
-                    _load();
+                    _load(markNew: false);
                   },
                 ),
               ),
@@ -149,7 +168,7 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
                   status: _status,
                   onChanged: (s) {
                     _status = s;
-                    _load();
+                    _load(markNew: false);
                   },
                 ),
             ],
@@ -158,7 +177,7 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
         Expanded(
           child: AsyncView<List<Article>>(
             future: _future,
-            onRetry: _load,
+            onRetry: () => _load(markNew: false),
             builder: (context, items) {
               if (items.isEmpty) {
                 return EmptyView(
@@ -168,19 +187,24 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
                 );
               }
               return RefreshIndicator(
-                onRefresh: () async => _load(),
+                onRefresh: () async => _load(markNew: true),
                 child: ListView.builder(
                   itemCount: items.length,
                   itemBuilder: (context, i) {
                     final a = _patched[items[i].id] ?? items[i];
                     final uri = _articleUri(a);
-                    return ArticleTile(
+                    final tile = ArticleTile(
                       article: a,
                       uri: uri,
                       onToggleRead: () => _toggleRead(a),
                       onTap: uri == null
                           ? _showInvalidLink
                           : () => _markOpened(a),
+                    );
+                    if (i != _newBoundary) return tile;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [const _NewArticlesDivider(), tile],
                     );
                   },
                 ),
@@ -189,6 +213,20 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The red line between freshly fetched articles and the ones already shown.
+class _NewArticlesDivider extends StatelessWidget {
+  const _NewArticlesDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('new-articles-divider'),
+      height: 2,
+      color: PulseboardColors.of(context).danger,
     );
   }
 }
