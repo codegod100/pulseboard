@@ -50,7 +50,6 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: const RoundedRectangleBorder(),
         title: const Text('Remove feed?'),
         content: Text('Stop following ${feed.title}?'),
         actions: [
@@ -200,7 +199,10 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
                 margin: const EdgeInsets.only(bottom: 8),
                 child: Material(
                   color: c.surface,
-                  shape: Border.all(color: c.border, width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: kBorderRadius,
+                    side: BorderSide(color: c.border),
+                  ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.only(left: 14, right: 4),
                     title: Text(
@@ -269,7 +271,6 @@ class _ImportOpmlDialogState extends State<_ImportOpmlDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    shape: const RoundedRectangleBorder(),
     title: const Text('Import OPML'),
     content: TextField(
       controller: _controller,

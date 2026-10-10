@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Flutter port of web/src/app.css.
-///
-/// Pulseboard's web design system is deliberately brutalist: a monochrome ink/paper
-/// base with one accent green, sharp corners, 2px borders and hard offset
-/// shadows, monospace throughout. Keeping that identity matters more than
-/// looking like stock Material, so this leans on a shared token set rather
-/// than ColorScheme.fromSeed.
+/// Pulseboard follows the Flatkit dashboard kit: a cool grey page with white
+/// cards, hairline borders and a soft 1px shadow, small rounded corners, a
+/// slate (#2e3e4e) side navigation and Flatkit's teal primary. Type is the
+/// kit's Source Sans stack throughout; small labels are uppercase and spaced.
 class PulseboardColors extends ThemeExtension<PulseboardColors> {
   const PulseboardColors({
     required this.bg,
@@ -18,11 +15,18 @@ class PulseboardColors extends ThemeExtension<PulseboardColors> {
     required this.accent,
     required this.accentInk,
     required this.danger,
+    required this.aside,
+    required this.asideFg,
   });
 
+  /// Page background.
   final Color bg;
   final Color fg;
+
+  /// Card, field and menu background.
   final Color surface;
+
+  /// Hairline border on cards and fields.
   final Color border;
   final Color muted;
   final Color faint;
@@ -30,28 +34,36 @@ class PulseboardColors extends ThemeExtension<PulseboardColors> {
   final Color accentInk;
   final Color danger;
 
+  /// Side navigation background and text.
+  final Color aside;
+  final Color asideFg;
+
   static const light = PulseboardColors(
-    bg: Color(0xFFFAFAF7),
-    fg: Color(0xFF0A0A0A),
-    surface: Color(0xFFF0EFE9),
-    border: Color(0xFF0A0A0A),
-    muted: Color(0xFF6B6B6B),
-    faint: Color(0xFFC8C8C2),
-    accent: Color(0xFF00754A),
-    accentInk: Color(0xFFECFFF4),
-    danger: Color(0xFFC82014),
+    bg: Color(0xFFF1F2F4),
+    fg: Color(0xFF3B4D5F),
+    surface: Color(0xFFFFFFFF),
+    border: Color(0x3378828C),
+    muted: Color(0xFF8A96A3),
+    faint: Color(0xFFDDE2E7),
+    accent: Color(0xFF0CC2AA),
+    accentInk: Color(0xFFFFFFFF),
+    danger: Color(0xFFF44455),
+    aside: Color(0xFF2E3E4E),
+    asideFg: Color(0xFFE8ECEF),
   );
 
   static const dark = PulseboardColors(
-    bg: Color(0xFF0A0A0A),
-    fg: Color(0xFFF5F5EF),
-    surface: Color(0xFF161616),
-    border: Color(0xFFF5F5EF),
-    muted: Color(0xFF9A9A9A),
-    faint: Color(0xFF3A3A3A),
-    accent: Color(0xFF00754A),
-    accentInk: Color(0xFF062018),
-    danger: Color(0xFFFF5A4D),
+    bg: Color(0xFF2A2B3C),
+    fg: Color(0xFFDCE1E6),
+    surface: Color(0xFF2E3E4E),
+    border: Color(0x33FFFFFF),
+    muted: Color(0xFF94A2B0),
+    faint: Color(0xFF45566A),
+    accent: Color(0xFF0CC2AA),
+    accentInk: Color(0xFFFFFFFF),
+    danger: Color(0xFFF44455),
+    aside: Color(0xFF232433),
+    asideFg: Color(0xFFDCE1E6),
   );
 
   static PulseboardColors of(BuildContext context) =>
@@ -65,17 +77,23 @@ class PulseboardColors extends ThemeExtension<PulseboardColors> {
       t < 0.5 ? this : (other as PulseboardColors? ?? this);
 }
 
-/// Compact UI labels retain the app's technical voice.
-const kMonoFallback = <String>['JetBrains Mono', 'IBM Plex Mono', 'monospace'];
+/// Flatkit's corner radius for cards, buttons, fields and dialogs.
+const kRadius = 4.0;
+const kBorderRadius = BorderRadius.all(Radius.circular(kRadius));
 
-/// Reading text is deliberately a separate voice: a classic serif, with the
-/// looser leading of a paper viewer. This is what lets a long article title or
-/// excerpt feel like something to read rather than another UI control.
-const kEditorialFallback = <String>[
-  'Noto Serif',
-  'Georgia',
-  'Times New Roman',
-  'serif',
+/// Flatkit's card shadow: a single soft pixel under the hairline border.
+const kCardShadow = [
+  BoxShadow(color: Color(0x0D000000), offset: Offset(0, 1), blurRadius: 1),
+];
+
+/// Flatkit's typeface, bundled under fonts/, and the stack behind it.
+const kSans = 'Source Sans 3';
+const kSansFallback = <String>[
+  'Source Sans Pro',
+  'Helvetica Neue',
+  'Helvetica',
+  'Arial',
+  'sans-serif',
 ];
 
 ThemeData pulseboardTheme(Brightness brightness) {
@@ -83,77 +101,79 @@ ThemeData pulseboardTheme(Brightness brightness) {
       ? PulseboardColors.dark
       : PulseboardColors.light;
 
-  TextStyle mono(
+  TextStyle sans(
     double size, {
     FontWeight weight = FontWeight.w400,
     Color? color,
+    double height = 1.5,
   }) => TextStyle(
-    fontFamilyFallback: kMonoFallback,
+    fontFamily: kSans,
+    fontFamilyFallback: kSansFallback,
     fontSize: size,
     fontWeight: weight,
     color: color ?? c.fg,
-    height: 1.45,
+    height: height,
   );
 
-  TextStyle editorial(
-    double size, {
-    FontWeight weight = FontWeight.w400,
-    Color? color,
-    FontStyle? fontStyle,
-  }) => TextStyle(
-    fontFamilyFallback: kEditorialFallback,
-    fontSize: size,
-    fontWeight: weight,
-    color: color ?? c.fg,
-    fontStyle: fontStyle,
-    height: 1.58,
+  final fieldBorder = OutlineInputBorder(
+    borderRadius: kBorderRadius,
+    borderSide: BorderSide(color: c.border),
   );
 
   return ThemeData(
     brightness: brightness,
+    fontFamily: kSans,
     scaffoldBackgroundColor: c.bg,
     canvasColor: c.bg,
     dividerColor: c.border,
-    splashFactory: NoSplash.splashFactory,
     colorScheme: ColorScheme.fromSeed(
       seedColor: c.accent,
       brightness: brightness,
-    ).copyWith(surface: c.bg, primary: c.accent, error: c.danger),
+    ).copyWith(surface: c.surface, primary: c.accent, error: c.danger),
     extensions: [c],
     textTheme: TextTheme(
-      displaySmall: editorial(30, weight: FontWeight.w600),
-      headlineSmall: editorial(23, weight: FontWeight.w600),
-      titleMedium: mono(16, weight: FontWeight.w700),
-      bodyLarge: editorial(19, weight: FontWeight.w500),
-      bodyMedium: editorial(16),
-      bodySmall: mono(12, color: c.muted),
-      labelLarge: mono(
+      displaySmall: sans(28, weight: FontWeight.w300, height: 1.3),
+      headlineSmall: sans(22, weight: FontWeight.w400, height: 1.3),
+      titleMedium: sans(15, weight: FontWeight.w600),
+      bodyLarge: sans(17, weight: FontWeight.w600, height: 1.4),
+      bodyMedium: sans(14),
+      bodySmall: sans(12, color: c.muted),
+      labelLarge: sans(
         12,
-        weight: FontWeight.w700,
-      ).copyWith(letterSpacing: 0.35),
+        weight: FontWeight.w600,
+      ).copyWith(letterSpacing: 0.6),
     ),
     appBarTheme: AppBarTheme(
-      backgroundColor: c.bg,
+      backgroundColor: c.surface,
       foregroundColor: c.fg,
-      elevation: 0,
+      elevation: 1,
+      scrolledUnderElevation: 1,
+      shadowColor: const Color(0x14000000),
+      surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      shape: Border(bottom: BorderSide(color: c.border, width: 2)),
-      titleTextStyle: mono(18, weight: FontWeight.w700),
+      titleTextStyle: sans(17, weight: FontWeight.w600),
     ),
     iconTheme: IconThemeData(color: c.fg, size: 20),
     visualDensity: VisualDensity.standard,
     progressIndicatorTheme: ProgressIndicatorThemeData(color: c.accent),
+    dividerTheme: DividerThemeData(color: c.border, thickness: 1, space: 1),
     drawerTheme: DrawerThemeData(
-      backgroundColor: c.bg,
-      shape: Border(right: BorderSide(color: c.border, width: 2)),
+      backgroundColor: c.aside,
+      shape: const RoundedRectangleBorder(),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: c.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: kBorderRadius),
+      titleTextStyle: sans(18, weight: FontWeight.w600),
     ),
     listTileTheme: ListTileThemeData(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       minVerticalPadding: 10,
-      selectedColor: c.fg,
-      selectedTileColor: c.surface,
-      titleTextStyle: mono(14, weight: FontWeight.w600),
-      subtitleTextStyle: mono(12, color: c.muted),
+      selectedColor: c.accent,
+      selectedTileColor: c.accent.withValues(alpha: 0.08),
+      titleTextStyle: sans(14, weight: FontWeight.w600),
+      subtitleTextStyle: sans(12, color: c.muted),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -161,49 +181,43 @@ ThemeData pulseboardTheme(Brightness brightness) {
         foregroundColor: c.accentInk,
         disabledBackgroundColor: c.faint,
         disabledForegroundColor: c.muted,
-        shape: const RoundedRectangleBorder(),
+        shape: const RoundedRectangleBorder(borderRadius: kBorderRadius),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        textStyle: mono(13, weight: FontWeight.w700),
+        textStyle: sans(13, weight: FontWeight.w600),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: c.fg,
-        side: BorderSide(color: c.border, width: 2),
-        shape: const RoundedRectangleBorder(),
+        backgroundColor: c.surface,
+        side: BorderSide(color: c.border),
+        shape: const RoundedRectangleBorder(borderRadius: kBorderRadius),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        textStyle: mono(13, weight: FontWeight.w700),
+        textStyle: sans(13, weight: FontWeight.w600),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: c.fg,
-        shape: const RoundedRectangleBorder(),
-        textStyle: mono(13, weight: FontWeight.w700),
+        foregroundColor: c.accent,
+        shape: const RoundedRectangleBorder(borderRadius: kBorderRadius),
+        textStyle: sans(13, weight: FontWeight.w600),
       ),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: c.fg,
-      contentTextStyle: mono(13, color: c.bg),
+      backgroundColor: c.aside,
+      contentTextStyle: sans(13, color: c.asideFg),
       behavior: SnackBarBehavior.floating,
-      shape: const RoundedRectangleBorder(),
+      shape: const RoundedRectangleBorder(borderRadius: kBorderRadius),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: c.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: c.border, width: 2),
+      border: fieldBorder,
+      enabledBorder: fieldBorder,
+      focusedBorder: fieldBorder.copyWith(
+        borderSide: BorderSide(color: c.accent),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: c.border, width: 2),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
-        borderSide: BorderSide(color: c.accent, width: 2),
-      ),
-      hintStyle: mono(14, color: c.muted),
+      hintStyle: sans(14, color: c.muted),
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     ),
   );

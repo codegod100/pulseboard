@@ -245,12 +245,13 @@ class _StatusFilter extends StatelessWidget {
       padding: const EdgeInsets.only(left: 12, right: 8),
       decoration: BoxDecoration(
         color: c.surface,
-        border: Border.all(color: c.border, width: 2),
+        borderRadius: kBorderRadius,
+        border: Border.all(color: c.border),
       ),
       child: DropdownButton<String>(
         value: status,
         underline: const SizedBox.shrink(),
-        borderRadius: BorderRadius.zero,
+        borderRadius: kBorderRadius,
         dropdownColor: c.surface,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(color: c.fg),
         onChanged: (v) => onChanged(v ?? 'unread'),

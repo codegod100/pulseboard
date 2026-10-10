@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../api/client.dart';
 import '../theme.dart';
 
-/// A hard-edged box with a 2px border and the offset shadow the web app uses
-/// for cards and buttons.
+/// A Flatkit card: white surface, hairline border, small radius and a soft
+/// 1px shadow.
 class PulseboardBox extends StatelessWidget {
   const PulseboardBox({
     super.key,
@@ -29,20 +29,19 @@ class PulseboardBox extends StatelessWidget {
     final box = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color ?? (filled ? c.surface : c.bg),
-        border: Border.all(color: c.border, width: 2),
-        boxShadow: shadow
-            ? [BoxShadow(color: c.border, offset: const Offset(3, 3))]
-            : null,
+        color: color ?? (filled ? c.bg : c.surface),
+        borderRadius: kBorderRadius,
+        border: Border.all(color: color ?? c.border),
+        boxShadow: shadow ? kCardShadow : null,
       ),
       child: child,
     );
     if (onTap == null) return box;
-    return InkWell(onTap: onTap, child: box);
+    return InkWell(onTap: onTap, borderRadius: kBorderRadius, child: box);
   }
 }
 
-/// Monospace pill used for counts, categories and other metadata.
+/// Flatkit label: a small rounded badge for counts and other metadata.
 class PulseboardTag extends StatelessWidget {
   const PulseboardTag(this.label, {super.key, this.emphasis = false});
 
@@ -53,23 +52,23 @@ class PulseboardTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = PulseboardColors.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
       decoration: BoxDecoration(
-        color: emphasis ? c.accent : Colors.transparent,
-        border: Border.all(color: emphasis ? c.accent : c.border, width: 1.5),
+        color: emphasis ? c.accent : c.faint,
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: emphasis ? c.accentInk : c.muted,
-              fontWeight: FontWeight.w700,
-            ),
+          color: emphasis ? c.accentInk : c.fg,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
 }
 
-/// Square-cornered primary button.
+/// Flatkit button: teal when [accent], otherwise a white bordered one.
 class PulseboardButton extends StatelessWidget {
   const PulseboardButton({
     super.key,
@@ -92,7 +91,6 @@ class PulseboardButton extends StatelessWidget {
       opacity: enabled ? 1 : 0.5,
       child: PulseboardBox(
         onTap: enabled ? onPressed : null,
-        filled: !accent,
         color: accent ? c.accent : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
@@ -111,9 +109,8 @@ class PulseboardButton extends StatelessWidget {
             ],
             Text(
               label,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: accent ? c.accentInk : c.fg,
-              ),
+              style: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(color: accent ? c.accentInk : c.fg),
             ),
           ],
         ),
@@ -149,7 +146,9 @@ class AsyncView<T> extends StatelessWidget {
         if (snap.hasError) {
           final err = snap.error;
           return ErrorView(
-            message: err is ApiException ? err.message : 'Something went wrong.',
+            message: err is ApiException
+                ? err.message
+                : 'Something went wrong.',
             onRetry: onRetry,
           );
         }
@@ -177,7 +176,8 @@ class ErrorView extends StatelessWidget {
             Text(
               '!',
               style: TextStyle(
-                fontFamilyFallback: kMonoFallback,
+                fontFamily: kSans,
+                fontFamilyFallback: kSansFallback,
                 fontSize: 40,
                 fontWeight: FontWeight.w700,
                 color: c.danger,
@@ -236,14 +236,15 @@ class FaviconBadge extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      color: c.faint,
+      decoration: BoxDecoration(color: c.faint, borderRadius: kBorderRadius),
       child: Text(
         letter,
         style: TextStyle(
-          fontFamilyFallback: kMonoFallback,
+          fontFamily: kSans,
+          fontFamilyFallback: kSansFallback,
           fontSize: size * 0.6,
-          fontWeight: FontWeight.w700,
-          color: c.bg,
+          fontWeight: FontWeight.w600,
+          color: c.fg,
         ),
       ),
     );
@@ -253,7 +254,8 @@ class FaviconBadge extends StatelessWidget {
       width: size,
       height: size,
       errorBuilder: (_, _, _) => fallback,
-      loadingBuilder: (_, child, progress) => progress == null ? child : fallback,
+      loadingBuilder: (_, child, progress) =>
+          progress == null ? child : fallback,
     );
   }
 }

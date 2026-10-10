@@ -56,7 +56,6 @@ class _HomeShellState extends State<HomeShell> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: const RoundedRectangleBorder(),
         title: Text('Mark $scope read?'),
         actions: [
           TextButton(
@@ -126,82 +125,97 @@ class _HomeShellState extends State<HomeShell> {
         ],
       ),
       drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
-                title: Text(
-                  'FEEDS',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.tune),
-                      tooltip: 'Manage feeds',
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        _manageFeeds();
-                      },
+        // Flatkit's slate side navigation: light text on the dark aside, with
+        // the selected feed picked out in the primary teal.
+        child: ListTileTheme(
+          textColor: c.asideFg,
+          iconColor: c.asideFg,
+          selectedColor: c.accent,
+          selectedTileColor: Colors.white.withValues(alpha: 0.05),
+          child: IconTheme(
+            data: IconThemeData(color: c.asideFg, size: 20),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+                    title: Text(
+                      'FEEDS',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: c.asideFg.withValues(alpha: 0.6),
+                        letterSpacing: 1.2,
+                      ),
                     ),
-                  ],
-                ),
-              ),
-              if (app.error != null)
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    app.error!,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: c.danger),
-                  ),
-                ),
-              Expanded(
-                child: ListView(
-                  children: [
-                    for (final f in app.sidebar)
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border(
-                            left: BorderSide(
-                              color: f.feedUrl == _selected.feedUrl
-                                  ? c.accent
-                                  : Colors.transparent,
-                              width: 4,
-                            ),
-                          ),
-                        ),
-                        child: ListTile(
-                          selected: f.feedUrl == _selected.feedUrl,
-                          leading: f.isAll
-                              ? const Icon(Icons.inbox_outlined, size: 18)
-                              : FaviconBadge(
-                                  url: f.faviconUrl,
-                                  seed: f.title,
-                                ),
-                          title: Text(
-                            f.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: f.unread > 0
-                              ? PulseboardTag(
-                                  '${f.unread}',
-                                  emphasis: !f.isAll,
-                                )
-                              : null,
-                          onTap: () {
-                            setState(() => _selected = f);
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.tune),
+                          tooltip: 'Manage feeds',
+                          color: c.asideFg,
+                          onPressed: () {
                             Navigator.of(context).pop();
+                            _manageFeeds();
                           },
                         ),
+                      ],
+                    ),
+                  ),
+                  if (app.error != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        app.error!,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: c.danger),
                       ),
-                  ],
-                ),
+                    ),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final f in app.sidebar)
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                left: BorderSide(
+                                  color: f.feedUrl == _selected.feedUrl
+                                      ? c.accent
+                                      : Colors.transparent,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: ListTile(
+                              selected: f.feedUrl == _selected.feedUrl,
+                              leading: f.isAll
+                                  ? const Icon(Icons.inbox_outlined, size: 18)
+                                  : FaviconBadge(
+                                      url: f.faviconUrl,
+                                      seed: f.title,
+                                    ),
+                              title: Text(
+                                f.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: f.unread > 0
+                                  ? PulseboardTag(
+                                      '${f.unread}',
+                                      emphasis: !f.isAll,
+                                    )
+                                  : null,
+                              onTap: () {
+                                setState(() => _selected = f);
+                                Navigator.of(context).pop();
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
