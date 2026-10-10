@@ -1,3 +1,4 @@
+import 'package:flatkit/flatkit.dart';
 import 'package:flutter/material.dart';
 
 import '../api/client.dart';
@@ -64,10 +65,10 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
   Future<List<Article>> _fetch({required bool markNew}) async {
     final previous = markNew ? _shownIds : null;
     final items = await AppScope.read(context).client.articles(
-          status: _status,
-          feedUrl: widget.feed.feedUrl,
-          search: _search,
-        );
+      status: _status,
+      feedUrl: widget.feed.feedUrl,
+      search: _search,
+    );
     _shownIds = {for (final a in items) a.id};
     _newBoundary = null;
     if (previous != null) {
@@ -131,35 +132,32 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Row(
             children: [
               Expanded(
-                child: TextField(
+                child: KitTextField(
                   controller: _searchController,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'Search articles',
-                    isDense: true,
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: _search.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Clear search',
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              _search = '';
-                              _load(markNew: false);
-                            },
-                          ),
-                  ),
+                  hint: 'Search articles',
+                  prefixIcon: Icons.search,
                   onSubmitted: (v) {
                     _search = v.trim();
                     _load(markNew: false);
                   },
                 ),
               ),
+              if (_search.isNotEmpty) ...[
+                const SizedBox(width: 4),
+                KitIconButton(
+                  Icons.close,
+                  tooltip: 'Clear search',
+                  onPressed: () {
+                    _searchController.clear();
+                    _search = '';
+                    _load(markNew: false);
+                  },
+                ),
+              ],
               const SizedBox(width: 8),
               // Search spans everything, so the status filter is meaningless
               // while one is active.
@@ -238,29 +236,9 @@ class _StatusFilter extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    final c = PulseboardColors.of(context);
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.only(left: 12, right: 8),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: kBorderRadius,
-        border: Border.all(color: c.border),
-      ),
-      child: DropdownButton<String>(
-        value: status,
-        underline: const SizedBox.shrink(),
-        borderRadius: kBorderRadius,
-        dropdownColor: c.surface,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: c.fg),
-        onChanged: (v) => onChanged(v ?? 'unread'),
-        items: const [
-          DropdownMenuItem(value: 'unread', child: Text('Unread')),
-          DropdownMenuItem(value: 'all', child: Text('All')),
-          DropdownMenuItem(value: 'read', child: Text('Read')),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => KitSegmented<String>(
+    segments: const [('unread', 'Unread'), ('all', 'All'), ('read', 'Read')],
+    selected: status,
+    onChanged: onChanged,
+  );
 }

@@ -1,47 +1,10 @@
+import 'package:flatkit/flatkit.dart';
 import 'package:flutter/material.dart';
 
 import '../api/client.dart';
 import '../theme.dart';
 
-/// A Flatkit card: white surface, hairline border, small radius and a soft
-/// 1px shadow.
-class PulseboardBox extends StatelessWidget {
-  const PulseboardBox({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(12),
-    this.onTap,
-    this.filled = false,
-    this.shadow = true,
-    this.color,
-  });
-
-  final Widget child;
-  final EdgeInsetsGeometry padding;
-  final VoidCallback? onTap;
-  final bool filled;
-  final bool shadow;
-  final Color? color;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = PulseboardColors.of(context);
-    final box = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? (filled ? c.bg : c.surface),
-        borderRadius: kBorderRadius,
-        border: Border.all(color: color ?? c.border),
-        boxShadow: shadow ? kCardShadow : null,
-      ),
-      child: child,
-    );
-    if (onTap == null) return box;
-    return InkWell(onTap: onTap, borderRadius: kBorderRadius, child: box);
-  }
-}
-
-/// Flatkit label: a small rounded badge for counts and other metadata.
+/// Small rounded badge for counts and other metadata.
 class PulseboardTag extends StatelessWidget {
   const PulseboardTag(this.label, {super.key, this.emphasis = false});
 
@@ -52,67 +15,16 @@ class PulseboardTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = PulseboardColors.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       decoration: BoxDecoration(
-        color: emphasis ? c.accent : c.faint,
-        borderRadius: const BorderRadius.all(Radius.circular(10)),
+        color: emphasis ? c.accent : KitTheme.of(context).hover,
+        borderRadius: BorderRadius.circular(kitRadius),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: emphasis ? c.accentInk : c.fg,
+          color: emphasis ? c.accentInk : c.muted,
           fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-/// Flatkit button: teal when [accent], otherwise a white bordered one.
-class PulseboardButton extends StatelessWidget {
-  const PulseboardButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-    this.accent = false,
-    this.busy = false,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final bool accent;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = PulseboardColors.of(context);
-    final enabled = onPressed != null && !busy;
-    return Opacity(
-      opacity: enabled ? 1 : 0.5,
-      child: PulseboardBox(
-        onTap: enabled ? onPressed : null,
-        color: accent ? c.accent : null,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (busy) ...[
-              SizedBox(
-                width: 12,
-                height: 12,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: accent ? c.accentInk : c.fg,
-                ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelLarge
-                  ?.copyWith(color: accent ? c.accentInk : c.fg),
-            ),
-          ],
         ),
       ),
     );
@@ -141,7 +53,7 @@ class AsyncView<T> extends StatelessWidget {
       future: future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: KitSpinner(size: 24));
         }
         if (snap.hasError) {
           final err = snap.error;
@@ -176,8 +88,6 @@ class ErrorView extends StatelessWidget {
             Text(
               '!',
               style: TextStyle(
-                fontFamily: kSans,
-                fontFamilyFallback: kSansFallback,
                 fontSize: 40,
                 fontWeight: FontWeight.w700,
                 color: c.danger,
@@ -186,7 +96,7 @@ class ErrorView extends StatelessWidget {
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            PulseboardButton(label: 'Retry', onPressed: onRetry),
+            KitButton('Retry', onPressed: onRetry),
           ],
         ),
       ),
@@ -236,15 +146,16 @@ class FaviconBadge extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: c.faint, borderRadius: kBorderRadius),
+      decoration: BoxDecoration(
+        color: c.faint,
+        borderRadius: BorderRadius.circular(3),
+      ),
       child: Text(
         letter,
         style: TextStyle(
-          fontFamily: kSans,
-          fontFamilyFallback: kSansFallback,
           fontSize: size * 0.6,
-          fontWeight: FontWeight.w600,
-          color: c.fg,
+          fontWeight: FontWeight.w700,
+          color: c.bg,
         ),
       ),
     );

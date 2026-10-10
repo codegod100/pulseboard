@@ -1,3 +1,4 @@
+import 'package:flatkit/flatkit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -47,19 +48,19 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
   }
 
   Future<void> _remove(Feed feed) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove feed?'),
+    final confirmed = await showKitDialog<bool>(
+      context,
+      (dialogContext) => KitDialog(
+        title: 'Remove feed?',
         content: Text('Stop following ${feed.title}?'),
         actions: [
-          TextButton(
+          KitButton(
+            'Keep',
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep'),
           ),
-          TextButton(
+          KitButton.danger(
+            'Remove',
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove'),
           ),
         ],
       ),
@@ -75,9 +76,9 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
   }
 
   Future<void> _importOpml() async {
-    final source = await showDialog<String>(
-      context: context,
-      builder: (_) => const _ImportOpmlDialog(),
+    final source = await showKitDialog<String>(
+      context,
+      (_) => const _ImportOpmlDialog(),
     );
     if (source == null || source.trim().isEmpty || !mounted) return;
     try {
@@ -117,10 +118,12 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => widget.onClose(_changed),
+        leading: Center(
+          child: KitIconButton(
+            Icons.arrow_back,
+            tooltip: 'Back',
+            onPressed: () => widget.onClose(_changed),
+          ),
         ),
         title: const Text('Manage feeds'),
       ),
@@ -136,28 +139,21 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: TextField(
+                child: KitTextField(
                   controller: _url,
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.done,
+                  hint: 'https://example.com/feed.xml',
                   onSubmitted: (_) => _add(),
-                  decoration: const InputDecoration(
-                    hintText: 'https://example.com/feed.xml',
-                  ),
                 ),
               ),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _adding ? null : _add,
-                icon: _adding
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.add),
-                label: const Text('Add'),
-              ),
+              if (_adding)
+                const SizedBox(
+                  width: kitControlHeight,
+                  height: kitControlHeight,
+                  child: Center(child: KitSpinner()),
+                )
+              else
+                KitButton.primary('Add', icon: Icons.add, onPressed: _add),
             ],
           ),
           const SizedBox(height: 28),
@@ -175,13 +171,11 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          TextField(
+          KitTextField(
             controller: _filter,
+            hint: 'Filter feeds',
+            prefixIcon: Icons.search,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Filter feeds',
-            ),
           ),
           const SizedBox(height: 8),
           if (feeds.isEmpty)
@@ -194,40 +188,51 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
               ),
             )
           else
-            ...feeds.map(
-              (feed) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: Material(
-                  color: c.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: kBorderRadius,
-                    side: BorderSide(color: c.border),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.only(left: 14, right: 4),
-                    title: Text(
-                      feed.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            KitPanel(
+              child: Column(
+                children: [
+                  for (final (i, feed) in feeds.indexed) ...[
+                    if (i > 0) const KitDivider(),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  feed.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: KitText.heading(context),
+                                ),
+                                Text(
+                                  feed.feedUrl,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: KitText.dim(context, small: true),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (feed.unread > 0)
+                            Text(
+                              '${feed.unread} unread',
+                              style: KitText.dim(context, small: true),
+                            ),
+                          const SizedBox(width: 4),
+                          KitIconButton(
+                            Icons.delete_outline,
+                            tooltip: 'Remove ${feed.title}',
+                            color: c.danger,
+                            onPressed: () => _remove(feed),
+                          ),
+                        ],
+                      ),
                     ),
-                    subtitle: Text(
-                      feed.feedUrl,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (feed.unread > 0) Text('${feed.unread} unread'),
-                        IconButton(
-                          tooltip: 'Remove ${feed.title}',
-                          icon: Icon(Icons.delete_outline, color: c.danger),
-                          onPressed: () => _remove(feed),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                  ],
+                ],
               ),
             ),
           const SizedBox(height: 28),
@@ -236,16 +241,21 @@ class _FeedManagerScreenState extends State<FeedManagerScreen> {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _importOpml,
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Import OPML'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _exportOpml,
-            icon: const Icon(Icons.content_copy),
-            label: const Text('Copy OPML backup'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              KitButton(
+                'Import OPML',
+                icon: Icons.upload_file,
+                onPressed: _importOpml,
+              ),
+              KitButton(
+                'Copy OPML backup',
+                icon: Icons.content_copy,
+                onPressed: _exportOpml,
+              ),
+            ],
           ),
         ],
       ),
@@ -270,24 +280,39 @@ class _ImportOpmlDialogState extends State<_ImportOpmlDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Import OPML'),
-    content: TextField(
-      controller: _controller,
-      autofocus: true,
-      minLines: 8,
-      maxLines: 14,
-      decoration: const InputDecoration(hintText: 'Paste your OPML here'),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+  Widget build(BuildContext context) {
+    final k = KitTheme.of(context);
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(kitRadius),
+      borderSide: BorderSide(color: k.border),
+    );
+    return KitDialog(
+      title: 'Import OPML',
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        minLines: 8,
+        maxLines: 14,
+        style: KitText.body(context),
+        decoration: InputDecoration(
+          hintText: 'Paste your OPML here',
+          hintStyle: KitText.dim(context),
+          filled: true,
+          fillColor: k.surface,
+          border: border,
+          enabledBorder: border,
+          focusedBorder: border.copyWith(
+            borderSide: BorderSide(color: k.focus, width: 2),
+          ),
+        ),
       ),
-      TextButton(
-        onPressed: () => Navigator.pop(context, _controller.text),
-        child: const Text('Import'),
-      ),
-    ],
-  );
+      actions: [
+        KitButton('Cancel', onPressed: () => Navigator.pop(context)),
+        KitButton.primary(
+          'Import',
+          onPressed: () => Navigator.pop(context, _controller.text),
+        ),
+      ],
+    );
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flatkit/flatkit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,11 @@ import 'package:pulseboard_app/src/screens/home_shell.dart';
 import 'package:pulseboard_app/src/theme.dart';
 import 'package:pulseboard_app/src/widgets/article_tile.dart';
 import 'package:url_launcher/link.dart';
+
+/// Finds a flatkit control by its tooltip, as [find.byTooltip] does for
+/// Material ones.
+Finder kitTooltip(String message) => find.byWidgetPredicate(
+    (w) => w is KitTooltip && w.message == message);
 
 /// A stand-in for the reader, covering the routes the shell touches.
 http.Client fakeReader({
@@ -84,6 +90,7 @@ Future<AppState> pump(WidgetTester tester,
     state: state,
     child: MaterialApp(
       theme: pulseboardTheme(Brightness.light),
+      builder: (context, child) => PulseboardKit(child: child!),
       home: const HomeShell(),
     ),
   ));
@@ -155,7 +162,7 @@ void main() {
     final seen = <String>[];
     await pump(tester, seen: seen);
 
-    await tester.tap(find.byTooltip('Refresh'));
+    await tester.tap(kitTooltip('Refresh'));
     await tester.pumpAndSettle();
 
     expect(seen, contains('POST /refresh'));
@@ -195,7 +202,7 @@ void main() {
         'is_read': false,
       });
 
-    await tester.tap(find.byTooltip('Refresh'));
+    await tester.tap(kitTooltip('Refresh'));
     await tester.pumpAndSettle();
 
     expect(seen.where((request) => request == 'GET /articles'), hasLength(2));
@@ -222,7 +229,7 @@ void main() {
     expect(divider, findsNothing);
 
     articles.insert(0, article(2, 'New article'));
-    await tester.tap(find.byTooltip('Refresh'));
+    await tester.tap(kitTooltip('Refresh'));
     await tester.pumpAndSettle();
 
     expect(divider, findsOneWidget);
@@ -231,7 +238,7 @@ void main() {
     expect(tester.getTopLeft(find.text('Old article')).dy, greaterThan(y));
 
     // Nothing new on the next fetch, so the line goes away.
-    await tester.tap(find.byTooltip('Refresh'));
+    await tester.tap(kitTooltip('Refresh'));
     await tester.pumpAndSettle();
     expect(divider, findsNothing);
   });
@@ -240,13 +247,13 @@ void main() {
       (tester) async {
     await pump(tester);
 
-    await tester.tap(find.byTooltip('Manage feeds').first);
+    await tester.tap(kitTooltip('Manage feeds').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Manage feeds'), findsOneWidget);
     expect(find.text('Add a subscription'), findsOneWidget);
     expect(find.text('Subscriptions'), findsOneWidget);
-    expect(find.byTooltip('Remove Feed A'), findsOneWidget);
+    expect(kitTooltip('Remove Feed A'), findsOneWidget);
     expect(find.text('Backup & restore'), findsOneWidget);
   });
 
@@ -254,9 +261,9 @@ void main() {
       (tester) async {
     await pump(tester);
 
-    await tester.tap(find.byTooltip('Manage feeds').first);
+    await tester.tap(kitTooltip('Manage feeds').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(kitTooltip('Back'));
     await tester.pumpAndSettle();
 
     expect(find.text('First article'), findsOneWidget);
@@ -268,7 +275,7 @@ void main() {
     expect(state.unread, 2);
 
     // The per-article button, not the app bar's "Mark all read".
-    await tester.tap(find.byTooltip('Mark read'));
+    await tester.tap(kitTooltip('Mark read'));
     await tester.pumpAndSettle();
 
     // The tile flips locally and the sidebar count follows, rather than the

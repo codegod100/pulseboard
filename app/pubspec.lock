@@ -81,6 +81,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+  flatkit:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: main
+      resolved-ref: "2c987017b5e953a95afd1b72e553ce686534d8de"
+      url: "https://github.com/codegod100/flutterkit"
+    source: git
+    version: "0.1.0"
   flutter:
     dependency: "direct main"
     description: flutter

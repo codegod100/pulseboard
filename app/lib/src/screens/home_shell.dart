@@ -1,3 +1,4 @@
+import 'package:flatkit/flatkit.dart';
 import 'package:flutter/material.dart';
 
 import '../api/client.dart';
@@ -53,18 +54,16 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _markAllRead() async {
     final scope = _selected.isAll ? 'everything' : _selected.title;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Mark $scope read?'),
+    final ok = await showKitDialog<bool>(
+      context,
+      (ctx) => KitDialog(
+        title: 'Mark $scope read?',
+        content: const SizedBox.shrink(),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
+          KitButton('Cancel', onPressed: () => Navigator.pop(ctx, false)),
+          KitButton.primary(
+            'Mark read',
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Mark read'),
           ),
         ],
       ),
@@ -101,125 +100,146 @@ class _HomeShellState extends State<HomeShell> {
       appBar: AppBar(
         title: Text(_selected.isAll ? 'Pulseboard' : _selected.title),
         actions: [
-          IconButton(
+          KitIconButton(
+            Icons.rss_feed,
             tooltip: 'Manage feeds',
-            icon: const Icon(Icons.rss_feed),
             onPressed: _manageFeeds,
           ),
-          IconButton(
+          KitIconButton(
+            Icons.done_all,
             tooltip: 'Mark all read',
-            icon: const Icon(Icons.done_all),
             onPressed: _markAllRead,
           ),
-          IconButton(
-            tooltip: 'Refresh',
-            icon: _refreshing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            onPressed: _refreshing ? null : _refresh,
-          ),
+          if (_refreshing)
+            const SizedBox(
+              width: kitControlHeight,
+              child: Center(child: KitSpinner()),
+            )
+          else
+            KitIconButton(
+              Icons.refresh,
+              tooltip: 'Refresh',
+              onPressed: _refresh,
+            ),
+          const SizedBox(width: 8),
         ],
       ),
       drawer: Drawer(
-        // Flatkit's slate side navigation: light text on the dark aside, with
-        // the selected feed picked out in the primary teal.
-        child: ListTileTheme(
-          textColor: c.asideFg,
-          iconColor: c.asideFg,
-          selectedColor: c.accent,
-          selectedTileColor: Colors.white.withValues(alpha: 0.05),
-          child: IconTheme(
-            data: IconThemeData(color: c.asideFg, size: 20),
-            child: SafeArea(
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
-                    title: Text(
-                      'FEEDS',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: c.asideFg.withValues(alpha: 0.6),
-                        letterSpacing: 1.2,
-                      ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text('Feeds', style: KitText.heading(context)),
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.tune),
-                          tooltip: 'Manage feeds',
-                          color: c.asideFg,
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _manageFeeds();
-                          },
-                        ),
-                      ],
+                    KitIconButton(
+                      Icons.tune,
+                      tooltip: 'Manage feeds',
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _manageFeeds();
+                      },
                     ),
-                  ),
-                  if (app.error != null)
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        app.error!,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: c.danger),
-                      ),
-                    ),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        for (final f in app.sidebar)
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                left: BorderSide(
-                                  color: f.feedUrl == _selected.feedUrl
-                                      ? c.accent
-                                      : Colors.transparent,
-                                  width: 3,
-                                ),
-                              ),
-                            ),
-                            child: ListTile(
-                              selected: f.feedUrl == _selected.feedUrl,
-                              leading: f.isAll
-                                  ? const Icon(Icons.inbox_outlined, size: 18)
-                                  : FaviconBadge(
-                                      url: f.faviconUrl,
-                                      seed: f.title,
-                                    ),
-                              title: Text(
-                                f.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              trailing: f.unread > 0
-                                  ? PulseboardTag(
-                                      '${f.unread}',
-                                      emphasis: !f.isAll,
-                                    )
-                                  : null,
-                              onTap: () {
-                                setState(() => _selected = f);
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              if (app.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    app.error!,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: c.danger),
+                  ),
+                ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  children: [
+                    for (final f in app.sidebar)
+                      _FeedRow(
+                        feed: f,
+                        selected: f.feedUrl == _selected.feedUrl,
+                        onPressed: () {
+                          setState(() => _selected = f);
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
       body: ArticlesScreen(key: ValueKey(_selected.feedUrl), feed: _selected),
+    );
+  }
+}
+
+/// One feed in the drawer: highlighted the moment the pointer is over it,
+/// with the selected feed marked by the accent bar.
+class _FeedRow extends StatelessWidget {
+  const _FeedRow({
+    required this.feed,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final Feed feed;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final k = KitTheme.of(context);
+    return Pressable(
+      onPressed: onPressed,
+      builder: (context, s) => Container(
+        height: 36,
+        margin: const EdgeInsets.only(bottom: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: selected || s.pressed
+              ? k.pressed
+              : (s.hovered ? k.hover : const Color(0x00000000)),
+          borderRadius: BorderRadius.circular(kitRadius),
+          border: s.focused ? Border.all(color: k.focus, width: 2) : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 16,
+              decoration: BoxDecoration(
+                color: selected ? k.accent : const Color(0x00000000),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (feed.isAll)
+              Icon(Icons.inbox_outlined, size: 18, color: k.text)
+            else
+              FaviconBadge(url: feed.faviconUrl, seed: feed.title),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                feed.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: KitText.body(context).copyWith(
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+            if (feed.unread > 0)
+              PulseboardTag('${feed.unread}', emphasis: !feed.isAll),
+          ],
+        ),
+      ),
     );
   }
 }

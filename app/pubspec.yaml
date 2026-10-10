@@ -43,6 +43,10 @@ dependencies:
   intl: ^0.20.3
   webview_cookie_manager: ^2.0.6
   flutter_widget_from_html_core: ^0.17.4
+  flatkit:
+    git:
+      url: https://github.com/codegod100/flutterkit
+      ref: main
 
 dev_dependencies:
   flutter_test:
@@ -65,19 +69,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
-  # Flatkit's typeface, bundled so it renders the same everywhere.
-  # SIL Open Font License; see fonts/LICENSE.md.
-  fonts:
-    - family: Source Sans 3
-      fonts:
-        - asset: fonts/SourceSans3-Light.ttf
-          weight: 300
-        - asset: fonts/SourceSans3-Regular.ttf
-        - asset: fonts/SourceSans3-SemiBold.ttf
-          weight: 600
-        - asset: fonts/SourceSans3-Bold.ttf
-          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

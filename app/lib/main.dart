@@ -40,9 +40,9 @@ class _PulseboardAppState extends State<PulseboardApp> {
         debugShowCheckedModeBanner: false,
         theme: pulseboardTheme(Brightness.light),
         darkTheme: pulseboardTheme(Brightness.dark),
+        builder: (context, child) => PulseboardKit(child: child!),
         home: const HomeShell(),
       ),
     );
   }
 }
-
