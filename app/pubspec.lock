@@ -86,7 +86,7 @@ packages:
     description:
       path: "."
       ref: main
-      resolved-ref: "2c987017b5e953a95afd1b72e553ce686534d8de"
+      resolved-ref: "11ed6131b7ff86b3ec159187e95b00076d26570b"
       url: "https://github.com/codegod100/flutterkit"
     source: git
     version: "0.1.0"

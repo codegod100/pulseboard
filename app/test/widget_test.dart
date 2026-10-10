@@ -167,6 +167,9 @@ void main() {
 
     expect(seen, contains('POST /refresh'));
     expect(find.textContaining('4 new'), findsOneWidget);
+
+    // Let the refresh toast time out so no timer outlives the test.
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('refresh reloads the visible articles', (tester) async {
@@ -208,6 +211,9 @@ void main() {
     expect(seen.where((request) => request == 'GET /articles'), hasLength(2));
     expect(find.text('First article'), findsNothing);
     expect(find.text('New article'), findsOneWidget);
+
+    // Let the refresh toast time out so no timer outlives the test.
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('a red line separates freshly fetched articles', (tester) async {
@@ -241,6 +247,9 @@ void main() {
     await tester.tap(kitTooltip('Refresh'));
     await tester.pumpAndSettle();
     expect(divider, findsNothing);
+
+    // Let the refresh toast time out so no timer outlives the test.
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('feed management exposes add and removal controls',

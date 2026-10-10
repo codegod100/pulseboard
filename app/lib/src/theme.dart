@@ -64,7 +64,7 @@ ThemeData pulseboardTheme(Brightness brightness) {
     FontWeight weight = FontWeight.w400,
     Color? color,
     double height = 1.4,
-  }) => TextStyle(
+  }) => kitTextStyle.copyWith(
     fontSize: size,
     fontWeight: weight,
     color: color ?? k.text,
@@ -105,14 +105,6 @@ ThemeData pulseboardTheme(Brightness brightness) {
       selectedTileColor: k.pressed,
       titleTextStyle: text(14, weight: FontWeight.w500),
       subtitleTextStyle: text(12, color: k.textDim),
-    ),
-    snackBarTheme: SnackBarThemeData(
-      backgroundColor: k.text,
-      contentTextStyle: text(13, color: k.background),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kitRadius),
-      ),
     ),
   );
 }

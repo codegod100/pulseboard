@@ -183,11 +183,8 @@ String relativeTime(DateTime? t) {
   return '${(d.inDays / 365).floor()}y';
 }
 
-void showToast(BuildContext context, String message) {
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
-}
+void showToast(BuildContext context, String message) =>
+    showKitToast(context, message);
 
 /// Flatten HTML to the text it reads as.
 ///

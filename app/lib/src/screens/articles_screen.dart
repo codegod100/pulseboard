@@ -140,24 +140,23 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
                   controller: _searchController,
                   hint: 'Search articles',
                   prefixIcon: Icons.search,
+                  trailing: _search.isEmpty
+                      ? null
+                      : KitIconButton.compact(
+                          Icons.close,
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            _search = '';
+                            _load(markNew: false);
+                          },
+                        ),
                   onSubmitted: (v) {
                     _search = v.trim();
                     _load(markNew: false);
                   },
                 ),
               ),
-              if (_search.isNotEmpty) ...[
-                const SizedBox(width: 4),
-                KitIconButton(
-                  Icons.close,
-                  tooltip: 'Clear search',
-                  onPressed: () {
-                    _searchController.clear();
-                    _search = '';
-                    _load(markNew: false);
-                  },
-                ),
-              ],
               const SizedBox(width: 8),
               // Search spans everything, so the status filter is meaningless
               // while one is active.
