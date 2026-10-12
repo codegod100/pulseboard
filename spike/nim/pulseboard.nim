@@ -20,7 +20,18 @@ import reader/[articlestore, feedfetcher, feedparser, feedstore, pulseboarddb,
 
 const
   DefaultPort = 8080
-  SessionLifetime = 12 * 60 * 60
+  ## A session ends after this long without use. Every authenticated request
+  ## pushes the expiry forward, so a reader who opens the app regularly is
+  ## never sent back to sign in.
+  SessionIdleLimit = 30 * 24 * 60 * 60
+  ## Renewal writes the users database, which deploy snapshots on every
+  ## change, so it happens at most this often per session.
+  SessionRenewEvery = 24 * 60 * 60
+  ## The cookie only carries the token; the server row decides whether it is
+  ## still good. It is kept far longer than the idle limit so a sliding
+  ## session is never cut short by the browser dropping the cookie. Browsers
+  ## cap Max-Age at 400 days.
+  SessionCookieMaxAge = 400 * 24 * 60 * 60
 
 type Reader = ref object
   db: PulseboardDb
@@ -76,15 +87,21 @@ proc createSession(r: Reader, did: string): string =
     r.db.db.run("DELETE FROM users WHERE did = 'local'")
   r.db.db.run(
     "INSERT INTO web_sessions (token, user_did, expires_at) VALUES (?, ?, ?)",
-    p(result), p(did), p((getTime().toUnix + SessionLifetime).int64))
+    p(result), p(did), p((getTime().toUnix + SessionIdleLimit).int64))
 
 proc sessionUser(r: Reader, req: Request): string =
   let token = cookieValue(req.headers.getOrDefault("Cookie").string,
                           "pulseboard_session")
   if token.len == 0: return ""
-  r.db.db.queryText(
+  let now = getTime().toUnix
+  result = r.db.db.queryText(
     "SELECT user_did FROM web_sessions WHERE token = ? AND expires_at > ?",
-    p(token), p(getTime().toUnix)).get("")
+    p(token), p(now)).get("")
+  if result.len > 0:
+    r.db.db.run(
+      "UPDATE web_sessions SET expires_at = ? WHERE token = ? AND expires_at < ?",
+      p((now + SessionIdleLimit).int64), p(token),
+      p((now + SessionIdleLimit - SessionRenewEvery).int64))
 
 proc clearSession(r: Reader, req: Request) =
   let token = cookieValue(req.headers.getOrDefault("Cookie").string,
@@ -362,7 +379,7 @@ proc handle(r: Reader, req: Request) {.async.} =
       await req.respond(Http303, "", newHttpHeaders({
         "Location": "/",
         "Set-Cookie": "pulseboard_session=" & token &
-          "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=" & $SessionLifetime,
+          "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=" & $SessionCookieMaxAge,
       }))
     except CatchableError as e:
       echo "auth/callback failed: ", e.msg
