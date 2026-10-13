@@ -190,6 +190,14 @@ void showToast(BuildContext context, String message) =>
 ///
 /// For summaries and previews only. Article bodies are rendered as HTML,
 /// which is safe because the server sanitises every body it sends.
+/// The start of [html] as plain text, for a two-line preview. Long-form feeds put whole posts (tens of KB of
+/// markup) in the summary; stripping and laying out all of it for every tile build is wasted work when two lines
+/// show, so only the first few KB are looked at.
+String summaryPreview(String html) {
+  final text = stripHtml(html.length > 4000 ? html.substring(0, 4000) : html);
+  return text.length > 400 ? text.substring(0, 400) : text;
+}
+
 String stripHtml(String html) => html
     .replaceAll(RegExp(r'<[^>]*>'), ' ')
     .replaceAll('&nbsp;', ' ')

@@ -102,7 +102,7 @@ class ArticleTile extends StatelessWidget {
                     if (article.summary.isNotEmpty) ...[
                       const SizedBox(height: 9),
                       Text(
-                        stripHtml(article.summary),
+                        summaryPreview(article.summary),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: text.bodyMedium?.copyWith(
