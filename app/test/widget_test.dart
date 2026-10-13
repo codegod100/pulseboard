@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flatkit/flatkit.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,7 +12,6 @@ import 'package:pulseboard_app/src/app_state.dart';
 import 'package:pulseboard_app/src/screens/home_shell.dart';
 import 'package:pulseboard_app/src/theme.dart';
 import 'package:pulseboard_app/src/widgets/article_tile.dart';
-import 'package:url_launcher/link.dart';
 
 /// Finds a flatkit control by its tooltip, as [find.byTooltip] does for
 /// Material ones.
@@ -128,18 +128,15 @@ void main() {
     expect(seen, contains('GET /feeds'));
   });
 
-  testWidgets('article links expose a native blank-target anchor',
+  testWidgets('right-clicking an article offers to open it in a new tab',
       (tester) async {
     await pump(tester);
 
-    final link = tester.widget<Link>(
-      find.descendant(
-        of: find.byType(ArticleTile),
-        matching: find.byType(Link),
-      ),
-    );
-    expect(link.uri, Uri.parse('https://a.test/1'));
-    expect(link.target, LinkTarget.blank);
+    final tile = find.byType(ArticleTile).first;
+    await tester.tap(tile, buttons: kSecondaryButton);
+    await tester.pump();
+    expect(find.text('Open in new tab'), findsOneWidget);
+    expect(find.text('Copy link'), findsOneWidget);
   });
 
   testWidgets('an empty reader says so rather than showing a spinner',
