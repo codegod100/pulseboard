@@ -156,10 +156,9 @@ class ArticleTile extends StatelessWidget {
     );
   }
 
-  /// Lays an invisible Link over [child] while the mouse is on the row. It
-  /// never follows the link itself (its followLink is not called), so a
-  /// left click still goes through Pressable; it is only there so the
-  /// browser sees a real anchor under the pointer.
+  /// Lays an invisible Link over [child] while the mouse is on the row, so
+  /// the browser sees a real anchor under the pointer: its right-click menu
+  /// works, and a click opens the article the way any link does.
   Widget _withHoverLink({required bool hovered, required Widget child}) {
     final u = uri;
     return Stack(
@@ -171,7 +170,17 @@ class ArticleTile extends StatelessWidget {
             child: Link(
               uri: u,
               target: LinkTarget.blank,
-              builder: (context, _) => const SizedBox.expand(),
+              // A left click on the anchor is followed by the browser itself,
+              // like any link. launchUrl's window.open with noopener gives
+              // tabs that never load in some browsers (webby).
+              builder: (context, followLink) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  onTap();
+                  followLink?.call();
+                },
+                child: const SizedBox.expand(),
+              ),
             ),
           ),
       ],
