@@ -1,6 +1,8 @@
 import 'package:flatkit/flatkit.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
@@ -29,10 +31,12 @@ class ArticleTile extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final read = article.isRead;
 
-    // No url_launcher `Link` here: on the web it puts a DOM anchor in the page
-    // for every row, and Flutter repositions all of them each frame while
-    // scrolling, which made scrolling visibly slower. Right-click and
-    // long-press open our own menu with "Open in new tab" instead.
+    // A url_launcher `Link` on every row puts a DOM anchor in the page for
+    // each one, and Flutter repositions all of them each frame while
+    // scrolling, which made scrolling visibly slower. So on the web only the
+    // row under the mouse gets a Link, laid over its text: the browser's own
+    // right-click menu (Open link in new tab, Copy link address) then works,
+    // with at most one anchor in the page. Long-press opens our own menu.
     return KitMenu(
       items: () => [
         KitMenuItem('Open in new tab', onSelected: uri == null ? null : _open),
@@ -44,7 +48,9 @@ class ArticleTile extends StatelessWidget {
         ),
       ],
       builder: (context, toggleMenu, _) => GestureDetector(
-        onSecondaryTap: toggleMenu,
+        // On the web the browser shows its link menu on right-click, so ours
+        // would only stack under it.
+        onSecondaryTap: kIsWeb ? null : toggleMenu,
         onLongPress: toggleMenu,
         child: Pressable(
           onPressed: () {
@@ -63,71 +69,76 @@ class ArticleTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: BoxDecoration(
-                              color: read ? c.faint : c.accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 7),
-                          Expanded(
-                            child: Text(
-                              article.feedTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.bodySmall?.copyWith(
-                                letterSpacing: 0.25,
+                  child: _withHoverLink(
+                    hovered: s.hovered,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: read ? c.faint : c.accent,
+                                shape: BoxShape.circle,
                               ),
                             ),
-                          ),
-                          if (article.published != null) ...[
-                            const SizedBox(width: 12),
-                            Text(
-                              relativeTime(article.published),
-                              style: text.bodySmall?.copyWith(
-                                letterSpacing: 0.25,
+                            const SizedBox(width: 7),
+                            Expanded(
+                              child: Text(
+                                article.feedTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.bodySmall?.copyWith(
+                                  letterSpacing: 0.25,
+                                ),
                               ),
                             ),
+                            if (article.published != null) ...[
+                              const SizedBox(width: 12),
+                              Text(
+                                relativeTime(article.published),
+                                style: text.bodySmall?.copyWith(
+                                  letterSpacing: 0.25,
+                                ),
+                              ),
+                            ],
                           ],
+                        ),
+                        const SizedBox(height: 10),
+                        Opacity(
+                          opacity: read ? 0.55 : 1,
+                          child: Text(
+                            article.title.isEmpty
+                                ? '(untitled)'
+                                : article.title,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyLarge?.copyWith(
+                              fontWeight: read
+                                  ? FontWeight.w400
+                                  : FontWeight.w600,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                        if (article.summary.isNotEmpty) ...[
+                          const SizedBox(height: 9),
+                          Text(
+                            summaryPreview(article.summary),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.bodyMedium?.copyWith(
+                              color: read
+                                  ? c.muted.withValues(alpha: 0.78)
+                                  : c.muted,
+                              height: 1.5,
+                            ),
+                          ),
                         ],
-                      ),
-                      const SizedBox(height: 10),
-                      Opacity(
-                        opacity: read ? 0.55 : 1,
-                        child: Text(
-                          article.title.isEmpty ? '(untitled)' : article.title,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyLarge?.copyWith(
-                            fontWeight: read
-                                ? FontWeight.w400
-                                : FontWeight.w600,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                      if (article.summary.isNotEmpty) ...[
-                        const SizedBox(height: 9),
-                        Text(
-                          summaryPreview(article.summary),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyMedium?.copyWith(
-                            color: read
-                                ? c.muted.withValues(alpha: 0.78)
-                                : c.muted,
-                            height: 1.5,
-                          ),
-                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 if (onToggleRead != null)
@@ -142,6 +153,28 @@ class ArticleTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// Lays an invisible Link over [child] while the mouse is on the row. It
+  /// never follows the link itself (its followLink is not called), so a
+  /// left click still goes through Pressable; it is only there so the
+  /// browser sees a real anchor under the pointer.
+  Widget _withHoverLink({required bool hovered, required Widget child}) {
+    final u = uri;
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        child,
+        if (kIsWeb && hovered && u != null)
+          Positioned.fill(
+            child: Link(
+              uri: u,
+              target: LinkTarget.blank,
+              builder: (context, _) => const SizedBox.expand(),
+            ),
+          ),
+      ],
     );
   }
 
