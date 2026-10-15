@@ -31,14 +31,20 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppScope.read(context).load();
+      // Show what is already stored, then ask the reader to fetch the feeds
+      // so the page opens on whatever has arrived since the last visit.
+      _refresh(quiet: true);
     });
   }
 
-  Future<void> _refresh() async {
+  /// Fetches the feeds. A [quiet] refresh (the one on page load) only
+  /// speaks up when something failed; the new-articles line shows the rest.
+  Future<void> _refresh({bool quiet = false}) async {
     setState(() => _refreshing = true);
     try {
       final result = await AppScope.read(context).refresh();
       if (!mounted) return;
+      if (quiet && result.errors.isEmpty) return;
       showToast(
         context,
         result.errors.isEmpty

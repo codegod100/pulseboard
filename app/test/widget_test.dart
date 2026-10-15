@@ -128,6 +128,15 @@ void main() {
     expect(seen, contains('GET /feeds'));
   });
 
+  testWidgets('opening the page fetches new articles', (tester) async {
+    final seen = <String>[];
+    await pump(tester, seen: seen);
+
+    expect(seen, contains('POST /refresh'));
+    // The automatic fetch stays quiet unless a feed failed.
+    expect(find.textContaining('new'), findsNothing);
+  });
+
   testWidgets('right-clicking an article offers to open it in a new tab',
       (tester) async {
     await pump(tester);
@@ -202,10 +211,11 @@ void main() {
         'is_read': false,
       });
 
+    final before = seen.where((r) => r == 'GET /articles').length;
     await tester.tap(kitTooltip('Refresh'));
     await tester.pumpAndSettle();
 
-    expect(seen.where((request) => request == 'GET /articles'), hasLength(2));
+    expect(seen.where((r) => r == 'GET /articles'), hasLength(before + 1));
     expect(find.text('First article'), findsNothing);
     expect(find.text('New article'), findsOneWidget);
 
