@@ -1,8 +1,0 @@
-{
-  "name": "pulseboard-atproto-auth",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@atproto/oauth-client-node": "^0.3.17"
-  }
-}

@@ -1,27 +1,21 @@
 # pulseboard
 
-An RSS reader. Two pieces:
+An RSS reader on Cloudflare. Two pieces, one Worker:
 
 | | |
 |---|---|
-| [`spike/nim`](spike/nim) | the reader — a Nim binary serving a small JSON API |
-| [`app`](app) | a Flutter client for it |
+| [`worker`](worker) | the reader: a Python Worker serving a small JSON API, with D1 for storage |
+| [`web`](web) | the web client, an [ultra](https://github.com/codegod100/ultra) app (LPython compiled to wasm) |
 
-Run the reader, point the client at it:
+The Worker serves the client's build (`web/dist`) as static assets, so the API
+and the page share an origin and there is no CORS to arrange. A cron trigger
+refreshes feeds every 30 minutes.
 
-```
-cd spike/nim && nim c --threads:on -d:ssl pulseboard.nim && ./pulseboard
-```
+Every push to `main` runs the tests and deploys; see
+[`worker/readme.md`](worker/readme.md) for the API, the tests and what the
+deploy needs.
 
-It listens on `127.0.0.1:8080`, keeps a SQLite database under
-`~/.local/share/pulseboard/`, and serves a plain HTML interface at the root — so
-it is usable on its own, without the Flutter client.
-
-```
-cd app && flutter run --dart-define=PULSEBOARD_BASE_URL=http://127.0.0.1:8080
-```
-
-## Why it is split
+## Why there is a server at all
 
 A browser cannot fetch most feeds directly: almost none send the CORS
 headers that would allow it. Something outside the browser has to do the
@@ -32,10 +26,10 @@ an excerpt.
 
 ## Security
 
-The reader requires AT Protocol OAuth. It uses the official ATProto client for
-discovery, PKCE, PAR, and DPoP, then immediately revokes the OAuth credential:
-Pulseboard keeps only the verified DID in a short-lived, opaque web session.
-Subscriptions and read state are scoped to that DID.
+The reader requires AT Protocol OAuth: a pushed authorization request with
+PKCE and DPoP, after which the tokens are revoked at once. Pulseboard keeps
+only the verified DID in a short-lived, opaque web session. Subscriptions and
+read state are scoped to that DID.
 
 Article bodies are markup from other people's servers, so every body the API
 serves — scraped and straight-from-the-feed alike — goes through a
@@ -47,9 +41,5 @@ text.
 
 This began as a port of a social RSS reader built on the AT Protocol — Go
 backend, SvelteKit frontend, accounts, annotations, a recommendation engine.
-That has been removed; the [git history](../../commits/main) has it if it is
-ever wanted. What is left is the part that reads feeds.
-
-Two bugs found in the original along the way were fixed there before it went:
-a retry policy that retried every failure regardless of status, and a decayed
-overlap count that truncated a real value to zero.
+It then became a Nim binary with a Flutter client, deployed on Modal, before
+moving to Cloudflare. The [git history](../../commits/main) has all of it.

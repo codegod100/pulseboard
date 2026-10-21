@@ -41,8 +41,5 @@ todo.md
 __pycache__/
 *.pyc
 
-# flutter
-app/.dart_tool/
-app/build/
-app/.flutter-plugins-dependencies
-app/*.iml
+# wrangler
+.wrangler/
