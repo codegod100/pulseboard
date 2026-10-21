@@ -1,0 +1,29 @@
+# Pulseboard on Cloudflare: a Python Worker serving the JSON API and the ultra
+# web client (static assets from ../web/dist), with D1 for storage.
+name = "pulseboard"
+main = "src/entry.py"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["python_workers"]
+workers_dev = true
+
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+# Every request reaches the Worker first: "/" needs a session before the
+# client is served, and the API shares paths with nothing in the bundle.
+run_worker_first = true
+not_found_handling = "none"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pulseboard"
+# Filled in by the deploy workflow, which creates the database if it is missing.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[triggers]
+# Refresh feeds that are due, so the reader is current before it is opened.
+crons = ["*/30 * * * *"]
+
+[observability]
+enabled = true

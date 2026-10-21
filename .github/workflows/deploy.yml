@@ -1,11 +1,9 @@
 name: Deploy
 
 on:
-  pull_request_target:
+  push:
     branches:
       - main
-    types:
-      - closed
   workflow_dispatch:
 
 permissions:
@@ -16,59 +14,85 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build and deploy to Modal
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+  test:
+    name: Test the Worker
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Unit tests (CPython, SQLite)
+        working-directory: worker
+        run: |
+          python -m pip install pytest cryptography
+          python -m pytest -q tests
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Runtime adapters under Pyodide
+        working-directory: worker/tests/pyodide
+        run: |
+          npm ci
+          npm test
+
+  deploy:
+    name: Deploy to Cloudflare
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: production
     env:
-      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
-      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: worker
     steps:
       - name: Check deployment credentials
         run: |
-          if [[ -z "$MODAL_TOKEN_ID" || -z "$MODAL_TOKEN_SECRET" ]]; then
-            echo "Add MODAL_TOKEN_ID and MODAL_TOKEN_SECRET as GitHub Actions secrets."
+          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
+            echo "::error::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as GitHub Actions secrets."
             exit 1
           fi
 
-      - name: Check out repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
         with:
-          # pull_request_target runs the trusted workflow from the base branch;
-          # build the commit that actually landed rather than the base ref that
-          # happened to be current when the event was delivered.
-          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          node-version: "22"
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+      - name: Install Wrangler
+        run: npm install --no-save wrangler@4
 
-      - name: Install Flutter dependencies
-        working-directory: app
-        run: flutter pub get
+      - name: Find or create the D1 database
+        # The database id is account-specific, so it is looked up here rather
+        # than committed.
+        run: |
+          id=$(npx wrangler d1 list --json | jq -r '.[] | select(.name == "pulseboard") | .uuid')
+          if [[ -z "$id" ]]; then
+            npx wrangler d1 create pulseboard
+            id=$(npx wrangler d1 list --json | jq -r '.[] | select(.name == "pulseboard") | .uuid')
+          fi
+          sed -i "s/00000000-0000-0000-0000-000000000000/$id/" wrangler.toml
+          echo "D1 database: $id"
 
-      - name: Test Flutter app
-        working-directory: app
-        # The `live` suite expects a separately running, authenticated reader.
-        # CI runs the deterministic unit/widget suite before building.
-        run: flutter test --exclude-tags live
+      - name: Apply database migrations
+        run: npx wrangler d1 migrations apply pulseboard --remote
 
-      - name: Build Flutter web app
-        working-directory: app
-        run: flutter build web --release --dart-define=PULSEBOARD_BASE_URL=
+      - name: Make sure the web client is there
+        # The ultra client is committed under web/dist. Until it is, serve a
+        # placeholder rather than fail the deploy.
+        run: |
+          if [[ ! -f ../web/dist/index.html ]]; then
+            mkdir -p ../web/dist
+            echo '<!doctype html><title>Pulseboard</title><p>The web client is not built yet. The API is up.</p>' > ../web/dist/index.html
+          fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install Modal
-        run: python -m pip install "modal==1.5.5"
-
-      - name: Deploy to Modal
-        run: modal deploy deploy/modal_app.py
+      - name: Deploy
+        run: npx wrangler deploy

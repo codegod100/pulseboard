@@ -1,0 +1,12 @@
+{
+  "name": "pulseboard-pyodide-harness",
+  "private": true,
+  "type": "module",
+  "description": "Runs worker/src/entry.py under Pyodide in Node, against stand-ins for D1, fetch and static assets.",
+  "scripts": {
+    "test": "node --experimental-sqlite harness.mjs ../../src"
+  },
+  "dependencies": {
+    "pyodide": "0.28.3"
+  }
+}
