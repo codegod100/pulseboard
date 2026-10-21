@@ -8,7 +8,9 @@ import path from "node:path";
 const src = process.argv[2];
 const repo = path.resolve(src, "..");
 const sqlite = new DatabaseSync(":memory:");
-sqlite.exec(fs.readFileSync(path.join(repo, "migrations/0001_init.sql"), "utf8"));
+for (const m of fs.readdirSync(path.join(repo, "migrations")).filter(f => f.endsWith(".sql")).sort()) {
+  sqlite.exec(fs.readFileSync(path.join(repo, "migrations", m), "utf8"));
+}
 
 class Stmt {
   constructor(sql, args = []) { this.sql = sql; this.args = args; }

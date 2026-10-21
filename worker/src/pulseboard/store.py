@@ -103,6 +103,17 @@ class Store:
                  a.summary or None, a.content or None,
                  sqlite_time(a.published), sqlite_time(a.updated)],
             ))
+        # Read state carried over from elsewhere (an import) is keyed on
+        # (feed_url, guid); attach it to whatever ids the articles got.
+        stmts.append((
+            """INSERT INTO read_state (user_did, article_id, is_read, read_at)
+               SELECT h.user_did, a.id, h.is_read, h.read_at
+               FROM read_state_history h
+               JOIN articles a ON a.feed_url = h.feed_url AND a.guid = h.guid
+               WHERE h.feed_url = ?
+               ON CONFLICT(user_did, article_id) DO NOTHING""",
+            [feed_url],
+        ))
         for i in range(0, len(stmts), 50):
             await self.db.batch(stmts[i:i + 50])
 

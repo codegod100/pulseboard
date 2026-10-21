@@ -228,3 +228,42 @@ def test_sign_in_rejects_bad_handle(db):
     app = App(db, http, SoftCrypto())
     assert run(app.handle(req("GET", "auth/authorize", identity="not a handle"))).status == 400
     assert run(app.handle(req("GET", "auth/authorize", identity="nobody.test"))).status == 400
+
+
+def test_import_from_modal(db, tmp_path):
+    """The import script's SQL brings subscriptions back, and read state
+    reattaches to articles when their feed is fetched again."""
+    import sqlite3
+    import sys
+    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "scripts"))
+    import import_modal
+
+    old = sqlite3.connect(tmp_path / "old.db")
+    old.executescript("""
+      CREATE TABLE feeds (feed_url TEXT, title TEXT, site_url TEXT, description TEXT,
+                          feed_type TEXT, favicon_url TEXT);
+      CREATE TABLE subscriptions (user_did TEXT, feed_url TEXT, title TEXT, category TEXT,
+                                  added_at TEXT);
+      CREATE TABLE articles (id INTEGER PRIMARY KEY, feed_url TEXT, guid TEXT);
+      CREATE TABLE read_state (user_did TEXT, article_id INTEGER, is_read INTEGER, read_at TEXT);
+      INSERT INTO feeds VALUES ('https://feeds.example/rss', 'Ex''ample', NULL, NULL, 'rss', NULL);
+      INSERT INTO subscriptions VALUES ('did:plc:abc123', 'https://feeds.example/rss', NULL, 'News',
+                                        '2026-01-01 00:00:00');
+      INSERT INTO articles VALUES (90, 'https://feeds.example/rss', 'https://example.com/1');
+      INSERT INTO read_state VALUES ('did:plc:abc123', 90, 1, '2026-02-02 00:00:00');
+    """)
+    old.commit()
+    old.close()
+    sql = "\n".join(import_modal.statements(sqlite3.connect(tmp_path / "old.db")))
+    db.conn.executescript(sql)
+    db.conn.executescript(sql)  # idempotent
+
+    http, state = oauth_server()
+    app = App(db, http, SoftCrypto())
+    cookie = sign_in(app, state).headers["Set-Cookie"].split(";")[0]
+    feeds = json.loads(run(app.handle(req("GET", "feeds", cookie))).body)
+    assert [(f["title"], f["category"]) for f in feeds] == [("Ex'ample", "News")]
+    run(app.handle(req("POST", "refresh", cookie)))
+    arts = json.loads(run(app.handle(req("GET", "articles", cookie, status="all"))).body)
+    assert {a["url"]: a["is_read"] for a in arts} == {
+        "https://example.com/1": True, "https://example.com/2": False}

@@ -49,3 +49,4 @@ __pycache__/
 worker/python_modules/
 worker/.venv-workers/
 worker/.wrangler/
+worker/.import/

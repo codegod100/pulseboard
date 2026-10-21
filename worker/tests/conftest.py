@@ -22,7 +22,8 @@ class SqliteDb:
     def __init__(self):
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
-        self.conn.executescript((ROOT / "migrations" / "0001_init.sql").read_text())
+        for migration in sorted((ROOT / "migrations").glob("*.sql")):
+            self.conn.executescript(migration.read_text())
 
     async def all(self, sql, params=()):
         return [dict(r) for r in self.conn.execute(sql, list(params)).fetchall()]

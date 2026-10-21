@@ -26,5 +26,6 @@ build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from we
 login = { cmd = "npx --yes wrangler@4 login", cwd = "worker", description = "Sign wrangler in to Cloudflare" }
 db-create = { cmd = "npx --yes wrangler@4 d1 create pulseboard", cwd = "worker", description = "Create the D1 database (first time only); put the printed id in worker/wrangler.toml" }
 migrate = { cmd = "npx --yes wrangler@4 d1 migrations apply pulseboard --remote", cwd = "worker", description = "Apply D1 migrations to the live database" }
+import-modal = { cmd = "mkdir -p .import && uvx modal volume get --force pulseboard-data db/pulseboard_articles .import/pulseboard_articles && python scripts/import_modal.py .import/pulseboard_articles > .import/import.sql && npx --yes wrangler@4 d1 execute pulseboard --remote --file .import/import.sql", cwd = "worker", depends-on = ["migrate"], description = "Copy feeds, subscriptions and read state from the old Modal volume into D1 (needs `uvx modal token new` once)" }
 dev = { cmd = "uvx --from 'workers-py>=1.17' pywrangler dev", cwd = "worker", description = "Run the Worker locally against a local D1" }
 deploy = { cmd = "uvx --from 'workers-py>=1.17' pywrangler deploy", cwd = "worker", depends-on = ["test", "migrate"], description = "Test, migrate, then deploy the Worker" }
