@@ -735,7 +735,6 @@ def view_sidebar() -> None:
     el("h2")
     text("Feeds")
     end()
-    icon_btn("i-tune", "Manage feeds", MANAGE, 0)
     icon_btn("i-panel", "Hide feeds", DRAWER, 0)
     end()
     if s_len(feeds_error) > 0:
