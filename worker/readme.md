@@ -66,6 +66,18 @@ and runs `wrangler deploy`, on every push to `main`. It needs two Actions
 secrets: `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" template plus
 D1 Edit) and `CLOUDFLARE_ACCOUNT_ID`.
 
+Without those secrets the deploy job is skipped, and the Worker is deployed
+by hand:
+
+```
+cd worker
+npx wrangler@4 login
+npx wrangler@4 d1 create pulseboard        # first time only; prints database_id
+# put that id in wrangler.toml's database_id (it is not a secret; commit it)
+npx wrangler@4 d1 migrations apply pulseboard --remote
+npx wrangler@4 deploy
+```
+
 ## Limits worth knowing
 
 Workers cap subrequests per invocation, so `/refresh` and an OPML import fetch
