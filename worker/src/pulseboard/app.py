@@ -259,6 +259,8 @@ class App:
                 return await self.get(req, user)
             if method == "POST":
                 return await self.post(req, user)
+            if method == "PUT" and root == "feeds":
+                return await self.edit_feed(req, user)
             if method == "DELETE":
                 if root == "feeds" and req.param("url"):
                     await self.store.unsubscribe(user, req.param("url"))
@@ -307,6 +309,30 @@ class App:
         if root == "unread":
             return json_resp({"count": await self.store.unread_count(user)})
         return fail(404, "not found")
+
+    async def edit_feed(self, req: Req, user: str) -> Resp:
+        """PUT /feeds: url names the subscription; new_url, title and category
+        replace its fields (new_url defaults to url, so a rename leaves it)."""
+        url = req.param("url").strip()
+        if not url or not await self.store.get_subscription(user, url):
+            return fail(404, "no such subscription")
+        new_url = req.param("new_url").strip() or url
+        if not new_url.startswith(("http://", "https://")):
+            return fail(400, "url must be http(s)")
+        if new_url != url and await self.store.get_subscription(user, new_url):
+            return fail(409, "already subscribed to that URL")
+        if new_url != url:
+            await self.store.upsert_feed(new_url)
+        await self.store.update_subscription(
+            user, url, new_url, req.param("title").strip(), req.param("category").strip())
+        if new_url == url:
+            return json_resp({"feed_url": url, "added": 0})
+        # The edit is saved either way; a fetch failure is reported alongside
+        # rather than as "error", which the client takes to mean nothing changed.
+        added, err = await self.refresh_feed(new_url)
+        if err:
+            return json_resp({"feed_url": new_url, "added": 0, "fetch_error": err})
+        return json_resp({"feed_url": new_url, "added": added})
 
     async def post(self, req: Req, user: str) -> Resp:
         root = req.path.split("/", 1)[0]

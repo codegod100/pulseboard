@@ -109,12 +109,19 @@ EXPORT_DONE: Const[i32] = 34
 TOAST_HIDE: Const[i32] = 35
 RETRY: Const[i32] = 36
 NOTHING: Const[i32] = 37
+EDIT_ASK: Const[i32] = 38
+EDIT_TITLE: Const[i32] = 39
+EDIT_URL: Const[i32] = 40
+EDIT_CAT: Const[i32] = 41
+EDIT_GO: Const[i32] = 42
+EDIT_DONE: Const[i32] = 43
 
 # which dialog is up
 DLG_NONE: Const[i32] = 0
 DLG_MARK_ALL: Const[i32] = 1
 DLG_REMOVE: Const[i32] = 2
 DLG_IMPORT: Const[i32] = 3
+DLG_EDIT: Const[i32] = 4
 
 # article list state
 LOADING: Const[i32] = 0
@@ -174,12 +181,15 @@ collapsed: i32 = 0       # wide screens: feed list hidden, remembered
 managing: i32 = 0
 changed: i32 = 0
 dialog: i32 = 0
-target: i32 = -1         # feed index the remove dialog is about
+target: i32 = -1         # feed index the remove or edit dialog is about
 
 add_url: i32 = 0
 adding: i32 = 0
 filter: i32 = 0
 opml: i32 = 0
+edit_title: i32 = 0      # the edit dialog's fields
+edit_url: i32 = 0
+edit_cat: i32 = 0
 
 toast: i32 = 0
 toast_on: i32 = 0
@@ -194,6 +204,7 @@ tmp2: i32 = 0
 def init() -> None:
     global collapsed
     global feeds_error, arts_error, sel_url, search, add_url, filter, opml
+    global edit_title, edit_url, edit_cat
     global toast, url, body, tmp, tmp2
     collapsed = load_i32("pulseboard.sidebar.collapsed", 0)
     feeds_error = s_new()
@@ -203,6 +214,9 @@ def init() -> None:
     add_url = s_new()
     filter = s_new()
     opml = s_new()
+    edit_title = s_new()
+    edit_url = s_new()
+    edit_cat = s_new()
     toast = s_new()
     url = s_new()
     body = s_new()
@@ -559,6 +573,50 @@ def update(msg: i32, arg: i32) -> None:
         if got_simple(arg, "Feed removed") == 1:
             changed = 1
             load_feeds()
+    elif msg == EDIT_ASK:
+        target = arg
+        jstr(feed_h[arg], "title", edit_title)
+        # an untitled feed shows its URL as the title; don't freeze that in
+        if s_eq(edit_title, feed_url[arg]) == 1:
+            s_clear(edit_title)
+        s_copy(edit_url, feed_url[arg])
+        jstr(feed_h[arg], "category", edit_cat)
+        dialog = DLG_EDIT
+    elif msg == EDIT_TITLE:
+        s_copy(edit_title, arg)
+    elif msg == EDIT_URL:
+        s_copy(edit_url, arg)
+    elif msg == EDIT_CAT:
+        s_copy(edit_cat, arg)
+    elif msg == EDIT_GO:
+        if s_len(edit_url) > 0 and target >= 0 and target < n_feeds:
+            dialog = DLG_NONE
+            s_set(url, "/feeds")
+            s_set(body, "url=")
+            s_add_enc(body, feed_url[target])
+            s_add(body, "&new_url=")
+            s_add_enc(body, edit_url)
+            s_add(body, "&title=")
+            s_add_enc(body, edit_title)
+            s_add(body, "&category=")
+            s_add_enc(body, edit_cat)
+            req("PUT", url, body, EDIT_DONE)
+    elif msg == EDIT_DONE:
+        if j_ok(arg) == 0:
+            toast_error(arg)
+        else:
+            if sel == target:
+                jstr(arg, "feed_url", sel_url)
+            changed = 1
+            # saved, but the new URL did not load: say why
+            if j_str(arg, "fetch_error", tmp) == 1 and s_len(tmp) > 0:
+                s_set(toast, "Saved, but the feed failed: ")
+                s_add_ref(toast, tmp)
+            else:
+                s_set(toast, "Feed updated")
+            show_toast()
+            load_feeds()
+        j_free(arg)
     elif msg == IMPORT_ASK:
         s_clear(opml)
         dialog = DLG_IMPORT
@@ -925,6 +983,7 @@ def view_manage() -> None:
                 num(feed_unread[f])
                 text(" unread")
                 end()
+            icon_btn("i-pencil", "Edit feed", EDIT_ASK, f)
             icon_btn("i-trash", "Remove feed", REMOVE_ASK, f)
             end()
     end()
@@ -986,6 +1045,18 @@ def view_dialog() -> None:
         btn("Remove", "destructive", REMOVE_YES, 0)
         end()
         end()
+    elif dialog == DLG_EDIT:
+        dialog_open("Edit feed", "", DIALOG_CLOSE)
+        div("edit-fields")
+        edit_field("Title", "Use the feed's own title", "text", edit_title, EDIT_TITLE)
+        edit_field("Feed URL", "https://example.com/feed.xml", "url", edit_url, EDIT_URL)
+        edit_field("Category", "None", "text", edit_cat, EDIT_CAT)
+        end()
+        dialog_footer_open()
+        btn("Cancel", "outline", DIALOG_CLOSE, 0)
+        btn("Save", "", EDIT_GO, 0)
+        end()
+        end()
     elif dialog == DLG_IMPORT:
         dialog_open("Import OPML", "Paste your OPML here.", DIALOG_CLOSE)
         el("textarea")
@@ -999,6 +1070,20 @@ def view_dialog() -> None:
         btn("Import", "", IMPORT_GO, 0)
         end()
         end()
+
+
+def edit_field(name: str, placeholder: str, kind: str, h: i32, msg: i32) -> None:
+    """A labelled input in the edit dialog; Enter saves."""
+    el("label")
+    cls("edit-field")
+    span("label")
+    text(name)
+    end()
+    input_open(placeholder, h, msg)
+    attr("type", kind)
+    on_enter(EDIT_GO, 0)
+    end()
+    end()
 
 
 def from_handle_input(h: i32, msg: i32) -> None:

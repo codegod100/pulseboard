@@ -84,7 +84,7 @@ class H(SimpleHTTPRequestHandler):
             return False
         if not signed_in:
             return self.send_json({"error": "sign in"}, 401)
-        f = self.form() if method == "POST" else {}
+        f = self.form() if method in ("POST", "PUT") else {}
         if p == "/feeds" and method == "GET":
             return self.send_json([{**x, "unread": unread_of(x["feed_url"]) + x.get("extra_unread", 0)} for x in feeds])
         if p == "/feeds" and method == "POST":
@@ -93,6 +93,16 @@ class H(SimpleHTTPRequestHandler):
                 return self.send_json({"error": "Not a feed URL."}, 400)
             feeds.append({"feed_url": url, "title": "Gamma " + url, "category": "", "favicon_url": ""})
             return self.send_json({"added": 0})
+        if p == "/feeds" and method == "PUT":
+            old = next((x for x in feeds if x["feed_url"] == f.get("url")), None)
+            if old is None:
+                return self.send_json({"error": "no such subscription"}, 404)
+            new = f.get("new_url") or old["feed_url"]
+            for a in articles:
+                if a["feed_url"] == old["feed_url"]:
+                    a["feed_url"] = new
+            old.update(feed_url=new, title=f.get("title") or new, category=f.get("category", ""))
+            return self.send_json({"feed_url": new, "added": 0})
         if p == "/feeds" and method == "DELETE":
             feeds[:] = [x for x in feeds if x["feed_url"] != q.get("url")]
             return self.send_json({"ok": True})
@@ -145,6 +155,10 @@ class H(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         if not self.api("POST"):
+            self.send_json({"error": "not found"}, 404)
+
+    def do_PUT(self):
+        if not self.api("PUT"):
             self.send_json({"error": "not found"}, 404)
 
     def do_DELETE(self):

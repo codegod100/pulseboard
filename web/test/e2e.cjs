@@ -125,9 +125,27 @@ const SHOTS = process.env.SHOTS;
     await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 1);
     await page.locator('.manage input[type="search"]').fill("");
     await shot("manage");
-    await page.locator(".subs li", { hasText: "Gamma" }).locator(".btn").click();
+    await page.locator(".subs li", { hasText: "Gamma" }).locator('[aria-label="Remove feed"]').click();
     await page.locator(".dialog .btn", { hasText: "Remove" }).click();
     await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 3);
+  });
+
+  await step("manage feeds: edit title and URL in place", async () => {
+    await page.locator(".subs li", { hasText: "Beta Blog" }).locator('[aria-label="Edit feed"]').click();
+    await page.waitForSelector(".dialog");
+    const title = page.locator(".dialog .edit-field", { hasText: "Title" }).locator("input");
+    const url = page.locator(".dialog .edit-field", { hasText: "Feed URL" }).locator("input");
+    assert.strictEqual(await title.inputValue(), "Beta Blog");
+    assert.strictEqual(await url.inputValue(), "https://b.example/rss");
+    await title.fill("Beta Blog (moved)");
+    await url.fill("https://b2.example/rss");
+    await shot("edit");
+    await page.locator(".dialog .btn", { hasText: "Save" }).click();
+    await page.waitForFunction(() => document.querySelector(".toast")?.textContent === "Feed updated");
+    const row = page.locator(".subs li", { hasText: "Beta Blog (moved)" });
+    await row.waitFor();
+    assert.match(await row.textContent(), /b2\.example/);
+    assert.strictEqual(await page.locator(".subs li").count(), 3);
   });
 
   await step("OPML import and export", async () => {

@@ -186,6 +186,54 @@ def test_sign_in_and_read(db):
     assert run(app.handle(req("GET", "feeds", cookie))).status == 401
 
 
+def test_edit_subscription(db):
+    http, state = oauth_server()
+    http.routes["https://feeds.example/moved"] = Res(200, RSS)
+    app = App(db, http, SoftCrypto())
+    cookie = sign_in(app, state).headers["Set-Cookie"].split(";")[0]
+    run(app.handle(req("POST", "feeds", cookie, url="https://feeds.example/rss")))
+    run(app.handle(req("POST", "feeds", cookie, url="https://feeds.example/atom")))
+    first = json.loads(run(app.handle(req("GET", "articles", cookie, feed="https://feeds.example/rss"))).body)[0]
+    run(app.handle(req("POST", "read", cookie, id=str(first["id"]))))
+
+    def feeds():
+        return {f["feed_url"]: f for f in json.loads(run(app.handle(req("GET", "feeds", cookie))).body)}
+
+    # Rename and recategorise in place.
+    ok = run(app.handle(req("PUT", "feeds", cookie, url="https://feeds.example/rss",
+                            title="My example", category="news")))
+    assert ok.status == 200, ok.body
+    f = feeds()["https://feeds.example/rss"]
+    assert (f["title"], f["category"], f["unread"]) == ("My example", "news", 1)
+
+    # Moving onto another subscription, to a non-http URL, or from one the
+    # user does not have, fails.
+    assert run(app.handle(req("PUT", "feeds", cookie, url="https://feeds.example/rss",
+                              new_url="https://feeds.example/atom"))).status == 409
+    assert run(app.handle(req("PUT", "feeds", cookie, url="https://feeds.example/rss",
+                              new_url="ftp://x"))).status == 400
+    assert run(app.handle(req("PUT", "feeds", cookie, url="https://feeds.example/nope",
+                              title="x"))).status == 404
+
+    # Moving to a new URL keeps the title and what was read.
+    moved = json.loads(run(app.handle(req("PUT", "feeds", cookie, url="https://feeds.example/rss",
+                                          new_url="https://feeds.example/moved", title="My example",
+                                          category="news"))).body)
+    assert moved == {"feed_url": "https://feeds.example/moved", "added": 2}
+    f = feeds()
+    assert "https://feeds.example/rss" not in f
+    assert (f["https://feeds.example/moved"]["title"], f["https://feeds.example/moved"]["unread"]) == ("My example", 1)
+    read = json.loads(run(app.handle(req("GET", "articles", cookie, status="read"))).body)
+    assert [(a["feed_url"], a["title"]) for a in read] == [("https://feeds.example/moved", first["title"])]
+    # The old feed has no subscribers left, so the cron trigger stops fetching it.
+    row = run(db.first("SELECT subscriber_count FROM feeds WHERE feed_url = ?", ["https://feeds.example/rss"]))
+    assert row["subscriber_count"] == 0
+
+    # An empty title falls back to the feed's own.
+    run(app.handle(req("PUT", "feeds", cookie, url="https://feeds.example/moved", title="")))
+    assert feeds()["https://feeds.example/moved"]["title"] == "Example"
+
+
 def test_users_are_isolated(db):
     http, state = oauth_server()
     app = App(db, http, SoftCrypto())

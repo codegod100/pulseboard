@@ -274,6 +274,34 @@ class Store:
                 WHERE feed_url = ?""", [feed_url, feed_url]),
         ])
 
+    async def update_subscription(self, user_did: str, feed_url: str, new_url: str,
+                                  title: str, category: str):
+        """Rename, recategorise, or move a subscription to another feed URL.
+        An empty title falls back to the feed's own. On a move, the user's
+        read state goes into read_state_history under the new URL, so articles
+        the new feed shares with the old one (same guid) arrive already read."""
+        stmts = []
+        if new_url != feed_url:
+            stmts.append((
+                """INSERT INTO read_state_history (user_did, feed_url, guid, is_read, read_at)
+                   SELECT r.user_did, ?, a.guid, r.is_read, r.read_at
+                   FROM read_state r JOIN articles a ON a.id = r.article_id
+                   WHERE r.user_did = ? AND a.feed_url = ?
+                   ON CONFLICT(user_did, feed_url, guid) DO NOTHING""",
+                [new_url, user_did, feed_url],
+            ))
+        stmts.append((
+            """UPDATE subscriptions SET feed_url = ?, title = ?, category = ?
+               WHERE user_did = ? AND feed_url = ?""",
+            [new_url, title or None, category or None, user_did, feed_url],
+        ))
+        if new_url != feed_url:
+            for url in (feed_url, new_url):
+                stmts.append(("""UPDATE feeds SET subscriber_count = (
+                      SELECT count(*) FROM subscriptions WHERE feed_url = ?)
+                    WHERE feed_url = ?""", [url, url]))
+        await self.db.batch(stmts)
+
     async def get_subscription(self, user_did: str, feed_url: str) -> dict | None:
         return await self.db.first(
             "SELECT id FROM subscriptions WHERE user_did = ? AND feed_url = ?",
