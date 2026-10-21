@@ -16,6 +16,8 @@ NOW = datetime.now(timezone.utc)
 feeds = [
     {"feed_url": "https://a.example/feed", "title": "Alpha News", "category": "", "favicon_url": ""},
     {"feed_url": "https://b.example/rss", "title": "Beta Blog", "category": "", "favicon_url": ""},
+    {"feed_url": "https://d.example/x", "title": "Delta, a feed whose title is far too long for the sidebar", "category": "", "favicon_url": "",
+     "extra_unread": 332},
 ]
 articles = []
 next_id = 1
@@ -84,7 +86,7 @@ class H(SimpleHTTPRequestHandler):
             return self.send_json({"error": "sign in"}, 401)
         f = self.form() if method == "POST" else {}
         if p == "/feeds" and method == "GET":
-            return self.send_json([{**x, "unread": unread_of(x["feed_url"])} for x in feeds])
+            return self.send_json([{**x, "unread": unread_of(x["feed_url"]) + x.get("extra_unread", 0)} for x in feeds])
         if p == "/feeds" and method == "POST":
             url = f.get("url", "")
             if not url.startswith("http"):
@@ -115,6 +117,9 @@ class H(SimpleHTTPRequestHandler):
                     a["is_read"] = f.get("undo") != "1"
             return self.send_json({"ok": True})
         if p == "/read-all":
+            for x in feeds:
+                if not f.get("feed") or x["feed_url"] == f["feed"]:
+                    x["extra_unread"] = 0
             for a in articles:
                 if not f.get("feed") or a["feed_url"] == f["feed"]:
                     a["is_read"] = True

@@ -15,7 +15,7 @@ from ultra import (el, end, text, text_ref, num, cls, cls_if, attr, attr_ref,
                    key, autofocus, on_click, on_enter, on_escape, on_input, value_ref,
                    after, div, span,
                    s_new, s_set, s_add, s_add_ref, s_add_num, s_copy, s_clear,
-                   s_free, s_len, s_eq, s_has,
+                   s_free, s_len, s_eq, s_has, store_i32, load_i32,
                    j_ok, j_err, j_idx, j_int, j_len, j_str, j_free)
 from ui import (btn, btn_open, input_open, tabs_list_open, tab, dialog_open,
                 dialog_footer_open)
@@ -44,6 +44,11 @@ def j_fmt(h: i32, path: str, kind: i32, dst: i32) -> i32:
 
 @jscall
 def copy_text(h: i32) -> None:
+    pass
+
+@jscall
+def narrow() -> i32:
+    """1 when the feed list is a drawer (a phone-width window)."""
     pass
 
 # Calls whose result is dropped need a home: LPython's wasm backend fails on a
@@ -165,6 +170,7 @@ refreshing: i32 = 0
 booted: i32 = 0          # the refresh on page load has started
 quiet: i32 = 0
 drawer: i32 = 0
+collapsed: i32 = 0       # wide screens: feed list hidden, remembered
 managing: i32 = 0
 changed: i32 = 0
 dialog: i32 = 0
@@ -186,8 +192,10 @@ tmp2: i32 = 0
 
 
 def init() -> None:
+    global collapsed
     global feeds_error, arts_error, sel_url, search, add_url, filter, opml
     global toast, url, body, tmp, tmp2
+    collapsed = load_i32("pulseboard.sidebar.collapsed", 0)
     feeds_error = s_new()
     arts_error = s_new()
     sel_url = s_new()
@@ -429,6 +437,7 @@ def got_simple(doc: i32, ok_text: str) -> i32:
 
 def update(msg: i32, arg: i32) -> None:
     global unread, sel, status, search_on, drawer, managing, changed, dialog
+    global collapsed
     global target, adding, toast_on, boundary
     ok: i32
     added: i32
@@ -505,7 +514,13 @@ def update(msg: i32, arg: i32) -> None:
     elif msg == DIALOG_CLOSE:
         dialog = DLG_NONE
     elif msg == DRAWER:
-        drawer = 1 - drawer
+        # one button: a drawer on phones, a collapsible column on wider screens
+        if narrow() == 1:
+            drawer = 1 - drawer
+        else:
+            drawer = 0
+            collapsed = 1 - collapsed
+            store_i32("pulseboard.sidebar.collapsed", collapsed)
     elif msg == MANAGE:
         managing = 1
         changed = 0
@@ -661,6 +676,7 @@ def view_sidebar() -> None:
     text("Feeds")
     end()
     icon_btn("i-tune", "Manage feeds", MANAGE, 0)
+    icon_btn("i-panel", "Hide feeds", DRAWER, 0)
     end()
     if s_len(feeds_error) > 0:
         el("p")
@@ -700,7 +716,7 @@ def view_header() -> None:
     cls("topbar")
     el("span")
     cls("menu")
-    icon_btn("i-menu", "Feeds", DRAWER, 0)
+    icon_btn("i-menu", "Show feeds", DRAWER, 0)
     end()
     el("h1")
     if sel >= 0:
@@ -993,6 +1009,7 @@ def from_handle_input(h: i32, msg: i32) -> None:
 
 def view() -> None:
     div("app")
+    cls_if("collapsed", collapsed == 1)
     if managing == 1:
         view_manage()
     else:

@@ -26,7 +26,8 @@ const SHOTS = process.env.SHOTS;
   await step("sidebar lists all feeds and each feed", async () => {
     await page.waitForSelector(".feed");
     const feeds = await page.$$eval(".feed .feed-title", (xs) => xs.map((x) => x.textContent));
-    assert.deepStrictEqual(feeds, ["All feeds", "Alpha News", "Beta Blog"]);
+    assert.deepStrictEqual(feeds.slice(0, 3), ["All feeds", "Alpha News", "Beta Blog"]);
+    assert.strictEqual(feeds.length, 4);
   });
 
   await step("page load fetches feeds and marks new articles with the red line", async () => {
@@ -119,14 +120,14 @@ const SHOTS = process.env.SHOTS;
     await page.waitForSelector(".manage");
     await page.locator('.manage input[type="url"]').fill("https://c.example/atom");
     await page.locator(".manage .btn", { hasText: "Add" }).click();
-    await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 3);
+    await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 4);
     await page.locator('.manage input[type="search"]').fill("beta");
     await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 1);
     await page.locator('.manage input[type="search"]').fill("");
     await shot("manage");
     await page.locator(".subs li", { hasText: "Gamma" }).locator(".btn").click();
     await page.locator(".dialog .btn", { hasText: "Remove" }).click();
-    await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 2);
+    await page.waitForFunction(() => document.querySelectorAll(".subs li").length === 3);
   });
 
   await step("OPML import and export", async () => {
@@ -142,11 +143,30 @@ const SHOTS = process.env.SHOTS;
     await page.waitForSelector(".reader");
   });
 
+  await step("counts are not clipped by a long title", async () => {
+    const ok = await page.$$eval(".feed", (rows) => rows.every((r) => {
+      const c = r.querySelector(".count"), box = r.closest(".feeds").getBoundingClientRect();
+      return !c || c.getBoundingClientRect().right <= box.left + r.closest(".feeds").clientWidth;
+    }));
+    assert.ok(ok);
+  });
+
+  await step("the feed list collapses on wide screens, and stays collapsed", async () => {
+    await page.locator('[aria-label="Hide feeds"]').click();
+    await page.locator(".sidebar").waitFor({ state: "hidden" });
+    await page.reload();
+    await page.waitForSelector(".feed", { state: "attached" });
+    assert.ok(await page.locator(".sidebar").isHidden());
+    await page.locator('[aria-label="Show feeds"]').click();
+    await page.locator(".sidebar").waitFor({ state: "visible" });
+    assert.ok(await page.locator(".sidebar").isVisible());
+  });
+
   await step("narrow screens put the feeds in a drawer", async () => {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.waitForTimeout(300);
     assert.ok(!(await page.locator(".sidebar").evaluate((n) => n.getBoundingClientRect().right > 0)));
-    await page.locator('[aria-label="Feeds"]').click();
+    await page.locator('[aria-label="Show feeds"]').click();
     await page.waitForTimeout(300);
     await shot("mobile-drawer");
     await page.locator(".feed", { hasText: "Beta Blog" }).click();
