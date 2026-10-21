@@ -11,9 +11,9 @@ The Worker serves the client's build (`web/dist`) as static assets, so the API
 and the page share an origin and there is no CORS to arrange. A cron trigger
 refreshes feeds every 30 minutes.
 
-Every push to `main` runs the tests and deploys; see
-[`worker/readme.md`](worker/readme.md) for the API, the tests and what the
-deploy needs.
+Everything runs through [pixi](https://pixi.sh): `pixi run test`,
+`pixi run build-web`, `pixi run deploy`. See
+[`worker/readme.md`](worker/readme.md) for the API, the tests and the deploy.
 
 ## Why there is a server at all
 

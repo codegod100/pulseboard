@@ -48,9 +48,9 @@ and `/` redirects to `/auth/login`.
 ## Tests
 
 ```
-cd worker
-uv run --no-project --with pytest --with cryptography pytest -q tests
-cd tests/pyodide && npm ci && npm test
+pixi run test           # both suites below
+pixi run test-worker    # CPython
+pixi run test-pyodide   # Pyodide in Node
 ```
 
 The first suite runs the reader under CPython against SQLite with canned HTTP
@@ -60,23 +60,20 @@ that a DPoP proof signed with WebCrypto verifies.
 
 ## Deploying
 
-The [Deploy workflow](../.github/workflows/deploy.yml) runs both suites, then
-creates the `pulseboard` D1 database if it does not exist, applies migrations
-and runs `wrangler deploy`, on every push to `main`. It needs two Actions
-secrets: `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" template plus
-D1 Edit) and `CLOUDFLARE_ACCOUNT_ID`.
-
-Without those secrets the deploy job is skipped, and the Worker is deployed
-by hand:
+The toolchain (Python, Node, pytest) comes from the [pixi](https://pixi.sh)
+manifest at the repository root; wrangler runs through `npx`.
 
 ```
-cd worker
-npx wrangler@4 login
-npx wrangler@4 d1 create pulseboard        # first time only; prints database_id
-# put that id in wrangler.toml's database_id (it is not a secret; commit it)
-npx wrangler@4 d1 migrations apply pulseboard --remote
-npx wrangler@4 deploy
+pixi run login          # once: sign wrangler in to Cloudflare
+pixi run db-create      # once: prints database_id; put it in wrangler.toml
+pixi run deploy         # tests, D1 migrations, then wrangler deploy
+pixi run dev            # local Worker with a local D1
 ```
+
+The [Deploy workflow](../.github/workflows/deploy.yml) does the same on every
+push to `main` when the repository has `CLOUDFLARE_API_TOKEN` (the "Edit
+Cloudflare Workers" template plus D1 Edit) and `CLOUDFLARE_ACCOUNT_ID` Actions
+secrets; without them it runs the tests and skips the deploy.
 
 ## Limits worth knowing
 
