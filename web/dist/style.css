@@ -135,6 +135,7 @@ button { font: inherit; }
 .sub-text { flex: 1; min-width: 0; display: grid; }
 .sub-text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub-text .muted { font-size: 12px; }
+.sub-error { font-size: 12px; color: var(--destructive); }
 .sub-unread { font-size: 12px; white-space: nowrap; }
 .subs [aria-label="Remove feed"] { color: var(--destructive); }
 .edit-fields { display: grid; gap: 14px; margin: 4px 0 8px; }

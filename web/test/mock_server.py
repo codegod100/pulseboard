@@ -102,7 +102,11 @@ class H(SimpleHTTPRequestHandler):
                 if a["feed_url"] == old["feed_url"]:
                     a["feed_url"] = new
             old.update(feed_url=new, title=f.get("title") or new, category=f.get("category", ""))
-            return self.send_json({"feed_url": new, "added": 0})
+            if "fail" in new:
+                old["error"] = f"fetching {new}: HTTP 403"
+                return self.send_json({"feed_url": new, "added": 0, "fetch_error": old["error"]})
+            old.pop("error", None)
+            return self.send_json({"feed_url": new, "added": 2})
         if p == "/feeds" and method == "DELETE":
             feeds[:] = [x for x in feeds if x["feed_url"] != q.get("url")]
             return self.send_json({"ok": True})

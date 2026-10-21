@@ -141,11 +141,22 @@ const SHOTS = process.env.SHOTS;
     await url.fill("https://b2.example/rss");
     await shot("edit");
     await page.locator(".dialog .btn", { hasText: "Save" }).click();
-    await page.waitForFunction(() => document.querySelector(".toast")?.textContent === "Feed updated");
+    await page.waitForFunction(() => document.querySelector(".toast")?.textContent === "Feed updated, 2 new");
     const row = page.locator(".subs li", { hasText: "Beta Blog (moved)" });
     await row.waitFor();
     assert.match(await row.textContent(), /b2\.example/);
     assert.strictEqual(await page.locator(".subs li").count(), 3);
+  });
+
+  await step("manage feeds: a feed that fails to load says why", async () => {
+    await page.locator(".subs li", { hasText: "Alpha News" }).locator('[aria-label="Edit feed"]').click();
+    await page.locator(".dialog .edit-field", { hasText: "Feed URL" }).locator("input").fill("https://fail.example/rss");
+    await page.locator(".dialog .btn", { hasText: "Save" }).click();
+    await page.waitForFunction(() => /^Saved, but the feed failed: .*HTTP 403/.test(document.querySelector(".toast")?.textContent || ""));
+    const err = page.locator(".subs li", { hasText: "Alpha News" }).locator(".sub-error");
+    await err.waitFor();
+    assert.match(await err.textContent(), /HTTP 403/);
+    await shot("manage-error");
   });
 
   await step("OPML import and export", async () => {

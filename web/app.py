@@ -613,7 +613,9 @@ def update(msg: i32, arg: i32) -> None:
                 s_set(toast, "Saved, but the feed failed: ")
                 s_add_ref(toast, tmp)
             else:
-                s_set(toast, "Feed updated")
+                s_set(toast, "Feed updated, ")
+                s_add_num(toast, j_int(arg, "added"))
+                s_add(toast, " new")
             show_toast()
             load_feeds()
         j_free(arg)
@@ -975,6 +977,12 @@ def view_manage() -> None:
             cls("muted")
             text_ref(feed_url[f])
             end()
+            # the last fetch failed: say why, or the feed just looks empty
+            if j_str(feed_h[f], "error", tmp) == 1 and s_len(tmp) > 0:
+                el("span")
+                cls("sub-error")
+                text_ref(tmp)
+                end()
             end()
             if feed_unread[f] > 0:
                 el("span")
