@@ -46,3 +46,6 @@ __pycache__/
 
 # pixi
 .pixi/
+worker/python_modules/
+worker/.venv-workers/
+worker/.wrangler/

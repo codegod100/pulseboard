@@ -9,6 +9,7 @@ python = "3.13.*"
 nodejs = ">=22"
 pytest = "*"
 cryptography = "*"
+uv = ">=0.12.3"
 
 [tasks]
 # --- tests ---
@@ -20,8 +21,10 @@ test = { depends-on = ["test-worker", "test-pyodide"], description = "Run every 
 build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from web/app.py with ultra" }
 
 # --- Cloudflare (run `pixi run login` once) ---
+# dev and deploy go through pywrangler, which vendors the Workers Python SDK
+# into worker/python_modules before handing over to wrangler.
 login = { cmd = "npx --yes wrangler@4 login", cwd = "worker", description = "Sign wrangler in to Cloudflare" }
 db-create = { cmd = "npx --yes wrangler@4 d1 create pulseboard", cwd = "worker", description = "Create the D1 database (first time only); put the printed id in worker/wrangler.toml" }
 migrate = { cmd = "npx --yes wrangler@4 d1 migrations apply pulseboard --remote", cwd = "worker", description = "Apply D1 migrations to the live database" }
-dev = { cmd = "npx --yes wrangler@4 dev", cwd = "worker", description = "Run the Worker locally against a local D1" }
-deploy = { cmd = "npx --yes wrangler@4 deploy", cwd = "worker", depends-on = ["test", "migrate"], description = "Test, migrate, then deploy the Worker" }
+dev = { cmd = "uvx --from 'workers-py>=1.17' pywrangler dev", cwd = "worker", description = "Run the Worker locally against a local D1" }
+deploy = { cmd = "uvx --from 'workers-py>=1.17' pywrangler deploy", cwd = "worker", depends-on = ["test", "migrate"], description = "Test, migrate, then deploy the Worker" }

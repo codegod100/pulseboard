@@ -1,0 +1,8 @@
+# Read by pywrangler, which vendors the Workers Python SDK
+# (workers-runtime-sdk) into python_modules/ before every dev or deploy.
+# The reader itself uses only the standard library.
+[project]
+name = "pulseboard-worker"
+version = "0.2.0"
+requires-python = ">=3.12"
+dependencies = []
