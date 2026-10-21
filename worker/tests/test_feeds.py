@@ -133,3 +133,15 @@ def test_fetch_sends_validators_and_handles_304():
     feed, etag, lm = run(fetch_feed(http, "https://f.example/c"))
     assert feed and etag == '"v1"' and lm.startswith("Tue")
     assert run(fetch_feed(http, "https://f.example/c", etag, lm)) == (None, etag, lm)
+
+
+def test_refusal_says_who_and_why():
+    http = FakeHttp({"https://x.example/rss": Res(
+        419, "<html><body><h1>Sorry.</h1> <p>Your request was blocked.</p></body></html>",
+        {"Server": "nginx"})})
+    try:
+        run(fetch_feed(http, "https://x.example/rss"))
+    except FeedError as exc:
+        assert str(exc) == "fetching https://x.example/rss: HTTP 419 from nginx: Sorry. Your request was blocked."
+    else:
+        raise AssertionError("expected FeedError")

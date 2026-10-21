@@ -13,11 +13,14 @@ the local name is both simpler and more forgiving.
 import asyncio
 import html.entities
 import json
+import logging
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+
+log = logging.getLogger("pulseboard")
 
 ACCEPT_FEED = (
     "application/xml,application/atom+xml,application/rss+xml,"
@@ -323,6 +326,19 @@ def parse_feed(body: bytes | str, url: str) -> ParsedFeed:
 # --- fetching ----------------------------------------------------------------
 
 
+def describe_refusal(res) -> str:
+    """What a server said along with an error status: which server, and the
+    start of its body as plain text. A bare "HTTP 419" says nothing about who
+    refused or why."""
+    server = res.headers.get("server", "")
+    text = res.body.decode("utf-8", errors="replace") if isinstance(res.body, bytes) else str(res.body or "")
+    text = " ".join(re.sub(r"<[^>]*>", " ", text).split())
+    out = f" from {server}" if server else ""
+    if text:
+        out += ": " + (text[:160] + "…" if len(text) > 160 else text)
+    return out
+
+
 def is_retryable(status: int) -> bool:
     """429 and 5xx only. Everything else is the server's settled opinion."""
     return status == 429 or status >= 500
@@ -361,7 +377,9 @@ async def fetch_feed(http, url: str, etag: str = "", last_modified: str = "",
             except FeedError as exc:
                 raise FeedError(f"parsing {url}: {exc}", res.status) from None
             return parsed, res.headers.get("etag", ""), res.headers.get("last-modified", "")
-        message, status = f"fetching {url}: HTTP {res.status}", res.status
+        message, status = f"fetching {url}: HTTP {res.status}{describe_refusal(res)}", res.status
+        log.warning("feed %s: HTTP %s headers=%s body=%r", url, res.status,
+                    res.headers, res.body[:500])
         if not is_retryable(res.status):
             break
     raise FeedError(message, status)
