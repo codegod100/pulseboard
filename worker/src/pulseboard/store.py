@@ -186,12 +186,38 @@ class Store:
              feed_type or None, favicon_url or None],
         )
 
-    async def mark_fetched(self, feed_url: str):
+    async def mark_fetched(self, feed_url: str, etag: str = "", last_modified: str = ""):
         await self.db.run(
             """UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP,
-                 last_error = NULL, error_count = 0 WHERE feed_url = ?""",
-            [feed_url],
+                 last_error = NULL, error_count = 0,
+                 etag = ?, last_modified = ? WHERE feed_url = ?""",
+            [etag or None, last_modified or None, feed_url],
         )
+
+    async def validators(self, feed_url: str) -> tuple[str, str]:
+        row = await self.db.first(
+            "SELECT etag, last_modified FROM feeds WHERE feed_url = ?", [feed_url])
+        return ((row["etag"] or "", row["last_modified"] or "") if row else ("", ""))
+
+    async def count_articles(self, feed_url: str) -> int:
+        row = await self.db.first(
+            "SELECT count(*) AS n FROM articles WHERE feed_url = ?", [feed_url])
+        return int(row["n"]) if row else 0
+
+    async def stale_subscriptions(self, user_did: str, minutes: int | None) -> list[str]:
+        """The user's feeds not fetched in the last `minutes` (all of them for
+        None), least recently fetched first."""
+        sql = """SELECT s.feed_url FROM subscriptions s
+               LEFT JOIN feeds f ON f.feed_url = s.feed_url
+               WHERE s.user_did = ?"""
+        params: list = [user_did]
+        if minutes is not None:
+            sql += """ AND (f.last_fetched_at IS NULL
+                            OR f.last_fetched_at < datetime('now', ?))"""
+            params.append(f"-{int(minutes)} minutes")
+        sql += " ORDER BY f.last_fetched_at IS NOT NULL, f.last_fetched_at"
+        rows = await self.db.all(sql, params)
+        return [r["feed_url"] for r in rows]
 
     async def mark_fetch_error(self, feed_url: str, error: str):
         await self.db.run(

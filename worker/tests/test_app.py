@@ -167,7 +167,12 @@ def test_sign_in_and_read(db):
 
     assert json.loads(run(app.handle(req("POST", "read-all", cookie))).body) == {"unread": 0}
 
-    refreshed = json.loads(run(app.handle(req("POST", "refresh", cookie))).body)
+    # Both feeds were fetched moments ago, so a plain refresh skips them...
+    calls = len(http.calls)
+    assert json.loads(run(app.handle(req("POST", "refresh", cookie))).body) == {"added": 0, "errors": []}
+    assert len(http.calls) == calls
+    # ...and a forced one fetches them again, concurrently.
+    refreshed = json.loads(run(app.handle(req("POST", "refresh", cookie, force="1"))).body)
     assert refreshed["added"] == 0 and len(refreshed["errors"]) == 1
 
     opml = run(app.handle(req("GET", "opml", cookie))).body

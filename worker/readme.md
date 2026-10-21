@@ -77,5 +77,14 @@ secrets; without them it runs the tests and skips the deploy.
 
 ## Limits worth knowing
 
-Workers cap subrequests per invocation, so `/refresh` and an OPML import fetch
-at most 40 feeds per request; the cron trigger picks up the rest.
+Feeds are fetched 8 at a time, with `If-None-Match`/`If-Modified-Since`, so an
+unchanged feed costs a 304. `/refresh` skips feeds fetched in the last 10
+minutes (`force=1` fetches them all). Workers cap subrequests per invocation, so
+one request fetches at most 40 feeds; the cron trigger picks up the rest.
+
+Each feed's last error is kept on the feed (`error` in `/feeds`):
+
+```
+npx wrangler@4 d1 execute pulseboard --remote --command \
+  "SELECT feed_url, error_count, last_error FROM feeds WHERE last_error IS NOT NULL"
+```

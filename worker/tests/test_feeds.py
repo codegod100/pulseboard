@@ -78,7 +78,7 @@ def test_fetch_retries_only_5xx():
         return Res(503) if len(attempts) < 2 else Res(200, RSS)
 
     http = FakeHttp({"https://f.example/a": flaky, "https://f.example/b": Res(404)})
-    assert len(run(fetch_feed(http, "https://f.example/a", base_delay=0)).articles) == 2
+    assert len(run(fetch_feed(http, "https://f.example/a", base_delay=0))[0].articles) == 2
     try:
         run(fetch_feed(http, "https://f.example/b", base_delay=0))
     except FeedError as exc:
@@ -121,3 +121,15 @@ def test_opml_round_trip():
     feeds = parse_opml(src)
     assert [(f.url, f.title, f.category) for f in feeds] == [
         ("https://a/feed", "A & co", ""), ("https://b/feed", "B", "News")]
+
+
+def test_fetch_sends_validators_and_handles_304():
+    def cond(method, url, headers, body):
+        if headers.get("If-None-Match") == '"v1"':
+            return Res(304)
+        return Res(200, RSS, {"ETag": '"v1"', "Last-Modified": "Tue, 10 Jun 2025 04:00:00 GMT"})
+
+    http = FakeHttp({"https://f.example/c": cond})
+    feed, etag, lm = run(fetch_feed(http, "https://f.example/c"))
+    assert feed and etag == '"v1"' and lm.startswith("Tue")
+    assert run(fetch_feed(http, "https://f.example/c", etag, lm)) == (None, etag, lm)

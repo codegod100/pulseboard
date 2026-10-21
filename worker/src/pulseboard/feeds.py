@@ -328,30 +328,39 @@ def is_retryable(status: int) -> bool:
     return status == 429 or status >= 500
 
 
-async def fetch_feed(http, url: str, retries: int = 2, base_delay: float = 0.5) -> ParsedFeed:
+async def fetch_feed(http, url: str, etag: str = "", last_modified: str = "",
+                     retries: int = 2, base_delay: float = 0.5):
     """Fetch and parse, retrying only what is worth retrying.
 
-    A 404 will still be a 404 in a second, and a document that does not parse
-    will not parse differently on a second read, so both fail at once.
+    Returns (feed, etag, last_modified); feed is None when the server answered
+    304 to the validators from last time. A 404 will still be a 404 in a
+    second, and a document that does not parse will not parse differently on a
+    second read, so both fail at once.
     """
     if not url.startswith(("http://", "https://")):
         raise FeedError(f"not an http(s) URL: {url}")
+    headers = {"Accept": ACCEPT_FEED, "User-Agent": USER_AGENT}
+    if etag:
+        headers["If-None-Match"] = etag
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
     message, status = "feed fetch failed", 0
     for attempt in range(retries + 1):
         if attempt:
             await asyncio.sleep(base_delay * (2 ** (attempt - 1)))
         try:
-            res = await http.request(
-                "GET", url, headers={"Accept": ACCEPT_FEED, "User-Agent": USER_AGENT}
-            )
+            res = await http.request("GET", url, headers=headers)
         except Exception as exc:  # the connection never completed
             message, status = f"fetching {url}: {exc}", 0
             continue
+        if res.status == 304:
+            return None, etag, last_modified
         if 200 <= res.status < 300:
             try:
-                return parse_feed(res.body, url)
+                parsed = parse_feed(res.body, url)
             except FeedError as exc:
                 raise FeedError(f"parsing {url}: {exc}", res.status) from None
+            return parsed, res.headers.get("etag", ""), res.headers.get("last-modified", "")
         message, status = f"fetching {url}: HTTP {res.status}", res.status
         if not is_retryable(res.status):
             break

@@ -6,6 +6,7 @@ This module knows nothing about Workers: `handle` takes a `Req` and returns a
 this path from the static assets" (the ultra web client).
 """
 
+import asyncio
 import json
 import logging
 import secrets
@@ -35,6 +36,12 @@ API_ROOTS = {"feeds", "articles", "unread", "opml", "refresh", "read",
 # How many feeds one request may fetch. Workers cap subrequests per invocation,
 # and each feed is one or more of them.
 MAX_FEEDS_PER_REQUEST = 40
+# Feeds fetched at once. Most of a refresh is waiting on other people's
+# servers, so doing them one after another is what made it slow.
+FETCH_CONCURRENCY = 8
+# The client refreshes every time it opens; a feed fetched this recently (by
+# that or by the cron trigger) is not fetched again.
+FRESH_MINUTES = 10
 
 
 @dataclass
@@ -128,31 +135,45 @@ class App:
     async def refresh_feed(self, feed_url: str) -> tuple[int, str]:
         """Fetch one feed and store what came back. A failure is recorded on
         the feed rather than raised: one unreachable feed should not stop a
-        refresh of the others. Returns (articles seen, error)."""
+        refresh of the others. Returns (new articles, error)."""
+        etag, last_modified = await self.store.validators(feed_url)
         try:
-            parsed = await fetch_feed(self.http, feed_url)
+            parsed, etag, last_modified = await fetch_feed(
+                self.http, feed_url, etag, last_modified)
         except FeedError as exc:
+            log.warning("feed %s failed: %s", feed_url, exc)
             await self.store.mark_fetch_error(feed_url, str(exc))
             return 0, str(exc)
+        except Exception as exc:
+            log.exception("feed %s failed: %s", feed_url, exc)
+            await self.store.mark_fetch_error(feed_url, f"internal error: {exc}")
+            return 0, f"internal error: {exc}"
+        if parsed is None:  # 304 Not Modified
+            await self.store.mark_fetched(feed_url, etag, last_modified)
+            return 0, ""
+        before = await self.store.count_articles(feed_url)
         await self.store.upsert_articles(feed_url, parsed)
         await self.store.upsert_feed(
             feed_url, parsed.title, parsed.site_url, parsed.description,
             parsed.kind, parsed.favicon_url)
-        await self.store.mark_fetched(feed_url)
-        return len(parsed.articles), ""
+        await self.store.mark_fetched(feed_url, etag, last_modified)
+        return max(await self.store.count_articles(feed_url) - before, 0), ""
 
-    async def refresh_for_user(self, user_did: str, feed_url: str) -> tuple[int, str]:
-        before = await self.store.unread_count(user_did, feed_url)
-        _, err = await self.refresh_feed(feed_url)
-        if err:
-            return 0, err
-        return max(await self.store.unread_count(user_did, feed_url) - before, 0), ""
+    async def refresh_many(self, urls: list[str]) -> list[tuple[str, int, str]]:
+        """Refresh several feeds concurrently. Returns (url, added, error)."""
+        gate = asyncio.Semaphore(FETCH_CONCURRENCY)
+
+        async def one(url):
+            async with gate:
+                added, err = await self.refresh_feed(url)
+                return url, added, err
+
+        return list(await asyncio.gather(*(one(u) for u in urls[:MAX_FEEDS_PER_REQUEST])))
 
     async def scheduled(self, older_than_minutes: int = 30, limit: int = MAX_FEEDS_PER_REQUEST):
         """The cron trigger: refresh whatever is due, oldest first."""
         await self.store.purge_expired(int(time.time()))
-        for url in await self.store.feeds_to_fetch(older_than_minutes, limit):
-            await self.refresh_feed(url)
+        await self.refresh_many(await self.store.feeds_to_fetch(older_than_minutes, limit))
 
     # --- auth ----------------------------------------------------------------
 
@@ -299,7 +320,7 @@ class App:
             # with its error visible, rather than vanishing.
             await self.store.upsert_feed(url)
             await self.store.subscribe(user, url, "", req.param("category"))
-            added, err = await self.refresh_for_user(user, url)
+            added, err = await self.refresh_feed(url)
             if err:
                 return json_resp({"feed_url": url, "added": 0, "error": err})
             return json_resp({"feed_url": url, "added": added})
@@ -314,30 +335,26 @@ class App:
                 imported = parse_opml(source)
             except ValueError as exc:
                 return fail(400, f"invalid OPML: {exc}")
-            added, errors = 0, []
-            for i, f in enumerate(imported):
+            added, errors, urls = 0, [], []
+            for f in imported:
                 if not f.url.startswith(("http://", "https://")):
                     errors.append({"feed_url": f.url, "error": "not an http(s) URL"})
                     continue
                 await self.store.upsert_feed(f.url, f.title, f.site_url, f.description)
                 if await self.store.subscribe(user, f.url, f.title, f.category):
                     added += 1
-                # The rest are fetched by the next refresh or cron run.
-                if i < MAX_FEEDS_PER_REQUEST:
-                    _, err = await self.refresh_feed(f.url)
-                    if err:
-                        errors.append({"feed_url": f.url, "error": err})
+                urls.append(f.url)
+            # Past the per-request cap, the next refresh or cron run fetches them.
+            errors += [{"feed_url": u, "error": e} for u, _, e in await self.refresh_many(urls) if e]
             return json_resp({"imported": len(imported), "added": added, "errors": errors})
 
         if root == "refresh":
-            total, errors = 0, []
-            subs = await self.store.list_subscriptions(user)
-            for s in subs[:MAX_FEEDS_PER_REQUEST]:
-                added, err = await self.refresh_for_user(user, s["feed_url"])
-                total += added
-                if err:
-                    errors.append({"feed_url": s["feed_url"], "error": err})
-            return json_resp({"added": total, "errors": errors})
+            minutes = None if req.param("force") == "1" else FRESH_MINUTES
+            results = await self.refresh_many(await self.store.stale_subscriptions(user, minutes))
+            return json_resp({
+                "added": sum(added for _, added, _ in results),
+                "errors": [{"feed_url": u, "error": e} for u, _, e in results if e],
+            })
 
         if root == "read":
             article_id = req.int_param("id", 0)
