@@ -735,7 +735,6 @@ def view_sidebar() -> None:
     el("h2")
     text("Feeds")
     end()
-    icon_btn("i-panel", "Hide feeds", DRAWER, 0)
     end()
     if s_len(feeds_error) > 0:
         el("p")
@@ -775,7 +774,8 @@ def view_header() -> None:
     cls("topbar")
     el("span")
     cls("menu")
-    icon_btn("i-menu", "Show feeds", DRAWER, 0)
+    # the one feed-list toggle: collapses the column, or opens the phone drawer
+    icon_btn("i-menu", "Toggle feeds", DRAWER, 0)
     end()
     el("h1")
     if sel >= 0:

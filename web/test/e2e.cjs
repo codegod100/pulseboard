@@ -181,12 +181,12 @@ const SHOTS = process.env.SHOTS;
   });
 
   await step("the feed list collapses on wide screens, and stays collapsed", async () => {
-    await page.locator('[aria-label="Hide feeds"]').click();
+    await page.locator('[aria-label="Toggle feeds"]').click();
     await page.locator(".sidebar").waitFor({ state: "hidden" });
     await page.reload();
     await page.waitForSelector(".feed", { state: "attached" });
     assert.ok(await page.locator(".sidebar").isHidden());
-    await page.locator('[aria-label="Show feeds"]').click();
+    await page.locator('[aria-label="Toggle feeds"]').click();
     await page.locator(".sidebar").waitFor({ state: "visible" });
     assert.ok(await page.locator(".sidebar").isVisible());
   });
@@ -195,7 +195,7 @@ const SHOTS = process.env.SHOTS;
     await page.setViewportSize({ width: 390, height: 800 });
     await page.waitForTimeout(300);
     assert.ok(!(await page.locator(".sidebar").evaluate((n) => n.getBoundingClientRect().right > 0)));
-    await page.locator('[aria-label="Show feeds"]').click();
+    await page.locator('[aria-label="Toggle feeds"]').click();
     await page.waitForTimeout(300);
     await shot("mobile-drawer");
     await page.locator(".feed", { hasText: "Beta Blog" }).click();
