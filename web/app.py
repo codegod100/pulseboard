@@ -343,7 +343,7 @@ def got_feeds(doc: i32) -> None:
 
 
 def link_articles() -> None:
-    """Point each row at its feed, for the sidebar counts."""
+    """Point each row at its feed, for the per-feed unread counts."""
     i: i32
     for i in range(n_arts):
         jstr(art_h[i], "feed_url", tmp)
@@ -687,63 +687,6 @@ def jtext(h: i32, path: str) -> None:
     text_ref(tmp)
 
 
-def view_feed_row(f: i32) -> None:
-    el("button")
-    key(f + 2)
-    cls("feed")
-    cls_if("selected", sel == f)
-    on_click(SELECT, f)
-    favicon(f)
-    el("span")
-    cls("feed-title")
-    jtext(feed_h[f], "title")
-    end()
-    if feed_unread[f] > 0:
-        el("span")
-        cls("count")
-        num(feed_unread[f])
-        end()
-    end()
-
-
-def view_sidebar() -> None:
-    f: i32
-    el("nav")
-    cls("sidebar")
-    div("sidebar-head")
-    el("h2")
-    text("Feeds")
-    end()
-    end()
-    if s_len(feeds_error) > 0:
-        el("p")
-        cls("error-text")
-        text_ref(feeds_error)
-        end()
-    div("feeds")
-    el("button")
-    key(1)
-    cls("feed")
-    cls_if("selected", sel < 0)
-    on_click(SELECT, -1)
-    icon("i-inbox")
-    el("span")
-    cls("feed-title")
-    text("All feeds")
-    end()
-    if unread > 0:
-        el("span")
-        cls("count")
-        cls("all")
-        num(unread)
-        end()
-    end()
-    for f in range(n_feeds):
-        view_feed_row(f)
-    end()
-    end()
-
-
 def view_header() -> None:
     el("header")
     cls("topbar")
@@ -753,11 +696,20 @@ def view_header() -> None:
     else:
         text("Pulseboard")
     end()
+    # unread count for what is shown: everything, or the chosen feed
     if sel >= 0:
-        # phones have no sidebar, so this is their way back to every feed
-        el("span")
-        cls("all-feeds")
+        if feed_unread[sel] > 0:
+            el("span")
+            cls("count")
+            num(feed_unread[sel])
+            end()
+        # feeds are picked in Manage feeds; this goes back to all of them
         icon_btn("i-x", "Show all feeds", SELECT, -1)
+    elif unread > 0:
+        el("span")
+        cls("count")
+        cls("all")
+        num(unread)
         end()
     div("actions")
     icon_btn("i-rss", "Manage feeds", MANAGE, 0)
@@ -944,8 +896,7 @@ def view_manage() -> None:
             el("li")
             key(f + 1)
             favicon(f)
-            # the title opens the feed's articles: on phones, where the
-            # sidebar is hidden, this is how a feed gets picked
+            # the title opens the feed's articles: this is how a feed gets picked
             div("sub-text")
             el("button")
             cls("sub-title")
@@ -1085,10 +1036,14 @@ def view() -> None:
     if managing == 1:
         view_manage()
     else:
-        view_sidebar()
         el("main")
         cls("reader")
         view_header()
+        if s_len(feeds_error) > 0:
+            el("p")
+            cls("error-text")
+            text_ref(feeds_error)
+            end()
         view_toolbar()
         view_articles()
         end()

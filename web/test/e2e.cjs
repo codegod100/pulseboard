@@ -23,11 +23,9 @@ const SHOTS = process.env.SHOTS;
 
   await page.goto(BASE + "/");
 
-  await step("sidebar lists all feeds and each feed", async () => {
-    await page.waitForSelector(".feed");
-    const feeds = await page.$$eval(".feed .feed-title", (xs) => xs.map((x) => x.textContent));
-    assert.deepStrictEqual(feeds.slice(0, 3), ["All feeds", "Alpha News", "Beta Blog"]);
-    assert.strictEqual(feeds.length, 4);
+  await step("no sidebar; the top bar shows the unread total", async () => {
+    await page.waitForSelector(".count.all");
+    assert.strictEqual(await page.locator(".sidebar, .feed").count(), 0);
   });
 
   await step("page load fetches feeds and marks new articles with the red line", async () => {
@@ -75,7 +73,8 @@ const SHOTS = process.env.SHOTS;
   });
 
   await step("choosing a feed scopes the list and the title", async () => {
-    await page.locator(".feed", { hasText: "Alpha News" }).click();
+    await page.locator('.topbar [aria-label="Manage feeds"]').click();
+    await page.locator(".sub-title", { hasText: "Alpha News" }).click();
     await page.waitForFunction(() => document.querySelector(".topbar h1").textContent === "Alpha News");
     await page.waitForFunction(() => [...document.querySelectorAll(".article .source")].every((s) => s.textContent === "Alpha News"));
     assert.strictEqual(await page.locator(".new-line").count(), 0);
@@ -98,7 +97,7 @@ const SHOTS = process.env.SHOTS;
   });
 
   await step("refresh button fetches, toasts, and draws the line", async () => {
-    await page.locator(".feed", { hasText: "All feeds" }).click();
+    await page.locator('[aria-label="Show all feeds"]').click();
     await page.locator(".tab", { hasText: "Unread" }).click();
     await page.waitForFunction(() => document.querySelector(".article h3")?.textContent === "Old story 5" || document.querySelector(".article h3")?.textContent === "Broken link story");
     await page.locator('[aria-label="Refresh"]').click();
@@ -172,26 +171,15 @@ const SHOTS = process.env.SHOTS;
     await page.waitForSelector(".reader");
   });
 
-  await step("counts are not clipped by a long title", async () => {
-    const ok = await page.$$eval(".feed", (rows) => rows.every((r) => {
-      const c = r.querySelector(".count"), box = r.closest(".feeds").getBoundingClientRect();
-      return !c || c.getBoundingClientRect().right <= box.left + r.closest(".feeds").clientWidth;
-    }));
-    assert.ok(ok);
-  });
-
-  await step("narrow screens drop the sidebar; Manage feeds picks a feed", async () => {
+  await step("phones pick a feed from Manage feeds too", async () => {
     await page.setViewportSize({ width: 390, height: 800 });
-    assert.ok(await page.locator(".sidebar").isHidden());
     await page.locator('.topbar [aria-label="Manage feeds"]').click();
     await page.locator(".sub-title", { hasText: "Alpha News" }).click();
     await page.waitForFunction(() => document.querySelector(".topbar h1")?.textContent === "Alpha News");
-    await page.waitForFunction(() => [...document.querySelectorAll(".article .source")].every((s) => s.textContent === "Alpha News"));
     await shot("mobile");
     await page.locator('[aria-label="Show all feeds"]').click();
     await page.waitForFunction(() => document.querySelector(".topbar h1")?.textContent === "Pulseboard");
     await page.setViewportSize({ width: 1200, height: 800 });
-    assert.ok(await page.locator(".sidebar").isVisible());
   });
 
   await step("a lost session goes to sign in", async () => {
