@@ -45,7 +45,6 @@ button { font: inherit; }
 }
 .count.all { background: var(--secondary); color: var(--muted-foreground); }
 .error-text { color: var(--destructive); font-size: 13px; padding: 0 16px; }
-.scrim { display: none; }
 
 .fav {
   position: relative; flex: none; width: 18px; height: 18px; border-radius: 3px;
@@ -61,12 +60,10 @@ button { font: inherit; }
   display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 8px 0 16px; flex: none;
   border-bottom: 1px solid var(--border);
 }
-.topbar h1 { flex: 1; min-width: 0; margin: 0; font-size: 18px; font-weight: 600;
+.topbar h1 { flex: 0 1 auto; min-width: 0; margin: 0; font-size: 18px; font-weight: 600;
              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.actions { display: flex; gap: 2px; }
-.menu { display: inline-flex; margin-left: -8px; }
-.app.collapsed { grid-template-columns: 1fr; }
-.app.collapsed .sidebar { display: none; }
+.actions { display: flex; gap: 2px; margin-left: auto; }
+.all-feeds { display: none; margin-left: -6px; }
 .btn.icon { color: var(--muted-foreground); }
 .btn.icon:hover { color: var(--foreground); }
 
@@ -151,16 +148,12 @@ textarea.opml { height: auto; min-height: 12rem; font-family: var(--font-mono); 
   border-radius: var(--radius); box-shadow: var(--shadow-lg); font-size: 14px; max-width: calc(100% - 32px);
 }
 
-/* ------------------------------------------------------------ narrow: the feed list is a drawer */
+/* ------------------------------------------------------------ narrow: no sidebar; feeds are
+   picked from Manage feeds */
 @media (max-width: 860px) {
-  .app, .app.collapsed { grid-template-columns: 1fr; }
-  .app.collapsed .sidebar { display: flex; }
-  .sidebar {
-    position: fixed; z-index: 40; inset: 0 auto 0 0; width: min(304px, 85vw);
-    transform: translateX(-100%); transition: transform .2s ease; box-shadow: var(--shadow-lg);
-  }
-  .sidebar.open { transform: none; }
-  .scrim { display: block; position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / .4); }
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .all-feeds { display: inline-flex; }
   .toolbar { flex-wrap: wrap; }
   .search { flex-basis: 100%; }
   .article-link { padding-left: 16px; }
@@ -171,7 +164,6 @@ textarea.opml { height: auto; min-height: 12rem; font-family: var(--font-mono); 
   display: inline-block; width: 18px; height: 18px; flex: none; background: currentColor;
   -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat;
 }
-.i-menu { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 6h16M4 12h16M4 18h16'/%3E%3C/svg%3E"); }
 .i-refresh { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 1 1-3-6.7L21 8'/%3E%3Cpath d='M21 3v5h-5'/%3E%3C/svg%3E"); }
 .i-check { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); }
 .i-check-all { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 7 17l-5-5'/%3E%3Cpath d='m22 10-7.5 7.5L13 16'/%3E%3C/svg%3E"); }
@@ -187,3 +179,8 @@ textarea.opml { height: auto; min-height: 12rem; font-family: var(--font-mono); 
 .i-pencil { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E"); }
 .i-upload { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12'/%3E%3C/svg%3E"); }
 .i-copy { --i: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='8' width='14' height='14' rx='2'/%3E%3Cpath d='M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2'/%3E%3C/svg%3E"); }
+.sub-title {
+  font-weight: 600; text-align: left; cursor: pointer; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.sub-title:hover { text-decoration: underline; }

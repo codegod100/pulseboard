@@ -180,28 +180,18 @@ const SHOTS = process.env.SHOTS;
     assert.ok(ok);
   });
 
-  await step("the feed list collapses on wide screens, and stays collapsed", async () => {
-    await page.locator('[aria-label="Toggle feeds"]').click();
-    await page.locator(".sidebar").waitFor({ state: "hidden" });
-    await page.reload();
-    await page.waitForSelector(".feed", { state: "attached" });
-    assert.ok(await page.locator(".sidebar").isHidden());
-    await page.locator('[aria-label="Toggle feeds"]').click();
-    await page.locator(".sidebar").waitFor({ state: "visible" });
-    assert.ok(await page.locator(".sidebar").isVisible());
-  });
-
-  await step("narrow screens put the feeds in a drawer", async () => {
+  await step("narrow screens drop the sidebar; Manage feeds picks a feed", async () => {
     await page.setViewportSize({ width: 390, height: 800 });
-    await page.waitForTimeout(300);
-    assert.ok(!(await page.locator(".sidebar").evaluate((n) => n.getBoundingClientRect().right > 0)));
-    await page.locator('[aria-label="Toggle feeds"]').click();
-    await page.waitForTimeout(300);
-    await shot("mobile-drawer");
-    await page.locator(".feed", { hasText: "Beta Blog" }).click();
-    await page.waitForFunction(() => !document.querySelector(".sidebar.open"));
-    await page.waitForTimeout(300);
+    assert.ok(await page.locator(".sidebar").isHidden());
+    await page.locator('.topbar [aria-label="Manage feeds"]').click();
+    await page.locator(".sub-title", { hasText: "Alpha News" }).click();
+    await page.waitForFunction(() => document.querySelector(".topbar h1")?.textContent === "Alpha News");
+    await page.waitForFunction(() => [...document.querySelectorAll(".article .source")].every((s) => s.textContent === "Alpha News"));
     await shot("mobile");
+    await page.locator('[aria-label="Show all feeds"]').click();
+    await page.waitForFunction(() => document.querySelector(".topbar h1")?.textContent === "Pulseboard");
+    await page.setViewportSize({ width: 1200, height: 800 });
+    assert.ok(await page.locator(".sidebar").isVisible());
   });
 
   await step("a lost session goes to sign in", async () => {

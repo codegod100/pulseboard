@@ -15,7 +15,7 @@ from ultra import (el, end, text, text_ref, num, cls, cls_if, attr, attr_ref,
                    key, autofocus, on_click, on_enter, on_escape, on_input, value_ref,
                    after, div, span,
                    s_new, s_set, s_add, s_add_ref, s_add_num, s_copy, s_clear,
-                   s_free, s_len, s_eq, s_has, store_i32, load_i32,
+                   s_free, s_len, s_eq, s_has,
                    j_ok, j_err, j_idx, j_int, j_len, j_str, j_free)
 from ui import (btn, btn_open, input_open, tabs_list_open, tab, dialog_open,
                 dialog_footer_open)
@@ -44,11 +44,6 @@ def j_fmt(h: i32, path: str, kind: i32, dst: i32) -> i32:
 
 @jscall
 def copy_text(h: i32) -> None:
-    pass
-
-@jscall
-def narrow() -> i32:
-    """1 when the feed list is a drawer (a phone-width window)."""
     pass
 
 # Calls whose result is dropped need a home: LPython's wasm backend fails on a
@@ -90,7 +85,7 @@ MARK_ALL_ASK: Const[i32] = 15
 MARK_ALL_YES: Const[i32] = 16
 MARK_ALL_DONE: Const[i32] = 17
 DIALOG_CLOSE: Const[i32] = 18
-DRAWER: Const[i32] = 19
+# 19 was the feed-list toggle
 MANAGE: Const[i32] = 20
 MANAGE_CLOSE: Const[i32] = 21
 ADD_INPUT: Const[i32] = 22
@@ -176,8 +171,6 @@ search_on: i32 = 0       # the search applied to the list
 refreshing: i32 = 0
 booted: i32 = 0          # the refresh on page load has started
 quiet: i32 = 0
-drawer: i32 = 0
-collapsed: i32 = 0       # wide screens: feed list hidden, remembered
 managing: i32 = 0
 changed: i32 = 0
 dialog: i32 = 0
@@ -202,11 +195,9 @@ tmp2: i32 = 0
 
 
 def init() -> None:
-    global collapsed
     global feeds_error, arts_error, sel_url, search, add_url, filter, opml
     global edit_title, edit_url, edit_cat
     global toast, url, body, tmp, tmp2
-    collapsed = load_i32("pulseboard.sidebar.collapsed", 0)
     feeds_error = s_new()
     arts_error = s_new()
     sel_url = s_new()
@@ -450,8 +441,7 @@ def got_simple(doc: i32, ok_text: str) -> i32:
 # ---------------------------------------------------------------- update
 
 def update(msg: i32, arg: i32) -> None:
-    global unread, sel, status, search_on, drawer, managing, changed, dialog
-    global collapsed
+    global unread, sel, status, search_on, managing, changed, dialog
     global target, adding, toast_on, boundary
     ok: i32
     added: i32
@@ -474,7 +464,6 @@ def update(msg: i32, arg: i32) -> None:
             s_copy(sel_url, feed_url[arg])
         else:
             s_clear(sel_url)
-        drawer = 0
         managing = 0
         search_on = 0
         s_clear(search)
@@ -527,18 +516,9 @@ def update(msg: i32, arg: i32) -> None:
             load_articles(0)
     elif msg == DIALOG_CLOSE:
         dialog = DLG_NONE
-    elif msg == DRAWER:
-        # one button: a drawer on phones, a collapsible column on wider screens
-        if narrow() == 1:
-            drawer = 1 - drawer
-        else:
-            drawer = 0
-            collapsed = 1 - collapsed
-            store_i32("pulseboard.sidebar.collapsed", collapsed)
     elif msg == MANAGE:
         managing = 1
         changed = 0
-        drawer = 0
     elif msg == MANAGE_CLOSE:
         managing = 0
         if changed == 1:
@@ -730,7 +710,6 @@ def view_sidebar() -> None:
     f: i32
     el("nav")
     cls("sidebar")
-    cls_if("open", drawer == 1)
     div("sidebar-head")
     el("h2")
     text("Feeds")
@@ -763,26 +742,23 @@ def view_sidebar() -> None:
         view_feed_row(f)
     end()
     end()
-    if drawer == 1:
-        div("scrim")
-        on_click(DRAWER, 0)
-        end()
 
 
 def view_header() -> None:
     el("header")
     cls("topbar")
-    el("span")
-    cls("menu")
-    # the one feed-list toggle: collapses the column, or opens the phone drawer
-    icon_btn("i-menu", "Toggle feeds", DRAWER, 0)
-    end()
     el("h1")
     if sel >= 0:
         jtext(feed_h[sel], "title")
     else:
         text("Pulseboard")
     end()
+    if sel >= 0:
+        # phones have no sidebar, so this is their way back to every feed
+        el("span")
+        cls("all-feeds")
+        icon_btn("i-x", "Show all feeds", SELECT, -1)
+        end()
     div("actions")
     icon_btn("i-rss", "Manage feeds", MANAGE, 0)
     icon_btn("i-check-all", "Mark all read", MARK_ALL_ASK, 0)
@@ -968,8 +944,13 @@ def view_manage() -> None:
             el("li")
             key(f + 1)
             favicon(f)
+            # the title opens the feed's articles: on phones, where the
+            # sidebar is hidden, this is how a feed gets picked
             div("sub-text")
-            el("strong")
+            el("button")
+            cls("sub-title")
+            attr("title", "Show this feed's articles")
+            on_click(SELECT, f)
             text_ref(tmp2)
             end()
             el("span")
@@ -1101,7 +1082,6 @@ def from_handle_input(h: i32, msg: i32) -> None:
 
 def view() -> None:
     div("app")
-    cls_if("collapsed", collapsed == 1)
     if managing == 1:
         view_manage()
     else:

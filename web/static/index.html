@@ -97,7 +97,6 @@
           strs[dst] = out;
           return out ? 1 : 0;
         },
-        narrow: () => (matchMedia("(max-width: 860px)").matches ? 1 : 0),
         copy_text: (h) => { navigator.clipboard?.writeText(strs[h] ?? "").catch(() => {}); },
       };
     };
