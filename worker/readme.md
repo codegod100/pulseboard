@@ -66,7 +66,7 @@ manifest at the repository root; wrangler runs through `npx`.
 ```
 pixi run login          # once: sign wrangler in to Cloudflare
 pixi run db-create      # once: prints database_id; put it in wrangler.toml
-pixi run deploy         # tests, D1 migrations, then wrangler deploy
+just deploy             # git pull, tests, D1 migrations, then wrangler deploy (same as `pixi run deploy`)
 pixi run dev            # local Worker with a local D1
 ```
 
