@@ -145,3 +145,16 @@ def test_refusal_says_who_and_why():
         assert str(exc) == "fetching https://x.example/rss: HTTP 419 from nginx: Sorry. Your request was blocked."
     else:
         raise AssertionError("expected FeedError")
+
+
+def test_cloudflare_challenge_says_so_without_retrying():
+    http = FakeHttp({"https://cf.example/rss": Res(
+        503, "<title>Just a moment...</title>",
+        {"Server": "cloudflare", "cf-mitigated": "challenge"})})
+    try:
+        run(fetch_feed(http, "https://cf.example/rss", base_delay=0))
+    except FeedError as exc:
+        assert exc.status == 503 and "Cloudflare bot protection" in str(exc)
+    else:
+        raise AssertionError("expected FeedError")
+    assert len(http.calls) == 1

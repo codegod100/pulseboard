@@ -339,6 +339,15 @@ def describe_refusal(res) -> str:
     return out
 
 
+def is_cloudflare_challenge(res) -> bool:
+    """A refusal from Cloudflare's bot protection in front of the feed's site,
+    as opposed to the site itself saying no."""
+    if res.headers.get("cf-mitigated", "") == "challenge":
+        return True
+    return (res.status in (403, 429, 503)
+            and res.headers.get("server", "").lower() == "cloudflare")
+
+
 def is_retryable(status: int) -> bool:
     """429 and 5xx only. Everything else is the server's settled opinion."""
     return status == 429 or status >= 500
@@ -380,6 +389,13 @@ async def fetch_feed(http, url: str, etag: str = "", last_modified: str = "",
         message, status = f"fetching {url}: HTTP {res.status}{describe_refusal(res)}", res.status
         log.warning("feed %s: HTTP %s headers=%s body=%r", url, res.status,
                     res.headers, res.body[:500])
+        if is_cloudflare_challenge(res):
+            # Retrying cannot get past a challenge page, so stop and say
+            # plainly what happened.
+            message = (f"fetching {url}: HTTP {res.status}: the site's Cloudflare bot "
+                       "protection refused the fetch (it served a challenge page, not "
+                       "the feed); the site owner would need to allow feed readers")
+            break
         if not is_retryable(res.status):
             break
     raise FeedError(message, status)
