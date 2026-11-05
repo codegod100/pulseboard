@@ -50,3 +50,7 @@ worker/python_modules/
 worker/.venv-workers/
 worker/.wrangler/
 worker/.import/
+
+# Qt toolchain (web/toolchain.sh)
+/.qt/
+aqtinstall.log

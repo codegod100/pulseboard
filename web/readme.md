@@ -19,7 +19,7 @@ Quick scene drawn into one canvas.
 ## Building
 
 ```sh
-./toolchain.sh   # once: Emscripten 4.0.7 and Qt 6.10.2 for wasm, into .qt/
+./toolchain.sh   # once: Emscripten 4.0.7 and Qt 6.10.2 for wasm, into ../.qt/
 ./build.sh       # compiles into dist/
 ```
 

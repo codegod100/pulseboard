@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set up the toolchain build.sh needs, in web/.qt (or $PB_TOOLCHAIN):
+# Set up the toolchain build.sh needs, in .qt at the repo root (or $PB_TOOLCHAIN):
 #
 #   emsdk/                      Emscripten 4.0.7, the version Qt 6.10 is tested with
 #   qt/6.10.2/wasm_singlethread Qt 6.10.2 for WebAssembly (official prebuilt)
@@ -14,7 +14,7 @@ QT=6.10.2
 AQT=3.3.0
 # emscripten-releases build for 4.0.7 (see emsdk's emscripten-releases-tags.json)
 EMSDK_BUILD=4bdd4bce8dd5cb25c14693aeab8cc977dd1d7a41
-T=${PB_TOOLCHAIN:-$PWD/.qt}
+T=${PB_TOOLCHAIN:-$(cd .. && pwd)/.qt}
 mkdir -p "$T"
 
 if [ ! -x "$T/emsdk/upstream/emscripten/emcc" ]; then
@@ -34,10 +34,12 @@ fi
 
 aqt() { uvx --from "aqtinstall==$AQT" aqt "$@"; }
 
-if [ ! -x "$T/qt/$QT/wasm_singlethread/bin/qt-cmake" ]; then
+if [ ! -f "$T/qt/$QT/wasm_singlethread/bin/qt-cmake" ]; then
   echo "== Qt $QT for WebAssembly"
   aqt install-qt all_os wasm "$QT" wasm_singlethread -O "$T/qt"
 fi
+# the all_os archive comes without execute bits
+chmod +x "$T/qt/$QT/wasm_singlethread/bin/"*
 
 if [ ! -x "$T/qt/$QT/gcc_64/libexec/moc" ]; then
   echo "== host Qt $QT"

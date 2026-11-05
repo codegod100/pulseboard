@@ -44,7 +44,7 @@ target_link_libraries(pulseboard PRIVATE
     Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick)
 
 if(EMSCRIPTEN)
-    target_link_options(pulseboard PRIVATE -lembind -sEXPORTED_RUNTIME_METHODS=UTF8ToString)
+    target_link_options(pulseboard PRIVATE -Oz -lembind -sEXPORTED_RUNTIME_METHODS=UTF8ToString)
     # the 30 MB Qt default is far more than a feed reader needs
     set_target_properties(pulseboard PROPERTIES QT_WASM_INITIAL_MEMORY "50MB")
 endif()

@@ -13,6 +13,7 @@ web/qml/
 web/src/
 web/static/
 web/test/
+.qt/
 web/.qt/
 web/build/
 worker/tests/

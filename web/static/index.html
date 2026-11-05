@@ -54,8 +54,16 @@
 
     try {
       // The browser test reaches the app's state through this.
+      // build.sh ships the wasm gzipped under a hashed name; unpack it here.
+      const wasm = fetch("pulseboard.wasm.gz").then((r) => {
+        if (!r.ok) throw new Error("fetching the app: HTTP " + r.status);
+        const body = r.body.pipeThrough(new DecompressionStream("gzip"));
+        return WebAssembly.compileStreaming(
+          new Response(body, { headers: { "Content-Type": "application/wasm" } }));
+      });
       window.pulseboard = await qtLoad({
         qt: {
+          module: wasm,
           containerElements: [screen],
           entryFunction: window.pulseboard_entry,
           onLoaded: () => splash.remove(),
