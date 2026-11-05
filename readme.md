@@ -35,9 +35,9 @@ just cloud
 
 There is nothing to paste: every sign-in happens in the browser. It pulls
 main and runs the tests, signs you in to Neon (`neonctl login`) and looks up
-your project's **pooled** connection string itself (asking which project if
-you have several, creating one called `pulseboard` if you have none; set
-`NEON_PROJECT_ID` to skip the question), offers to copy the existing data from
+the **pooled** connection string of the Neon project named `pulseboard`
+itself, creating that project if it doesn't exist (`NEON_PROJECT=<name>` or
+`NEON_PROJECT_ID=<id>` uses another), offers to copy the existing data from
 Cloudflare D1 (signing you in to Cloudflare if needed), then deploys to
 FastAPI Cloud (signing you in there the first time), stores the string on the
 app as the secret `DATABASE_URL`, and deploys again so the app picks it up.

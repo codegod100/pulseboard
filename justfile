@@ -8,38 +8,33 @@ deploy-cloud:
 
 # Set up FastAPI Cloud with Neon and deploy, start to finish. Every sign-in
 # happens in the browser: Neon (to look up the database's pooled connection
-# string, creating a "pulseboard" project if you have none), Cloudflare (only
+# string of the "pulseboard" project, creating it if needed), Cloudflare (only
 # if you copy the D1 data across) and FastAPI Cloud. The string is stored on
-# the app as the DATABASE_URL secret. Safe to run again. NEON_PROJECT_ID picks
-# the project without asking.
+# the app as the DATABASE_URL secret. Safe to run again. NEON_PROJECT (a name)
+# or NEON_PROJECT_ID uses another Neon project.
 cloud:
     #!/usr/bin/env bash
     set -euo pipefail
     neon() { npx --yes neonctl@8 --no-analytics "$@"; }
-    tab=$'\t'
     git pull --ff-only
     pixi run test-worker
 
     neon me >/dev/null 2>&1 || neon login
+    # The Neon project named pulseboard (NEON_PROJECT to use another name,
+    # NEON_PROJECT_ID to name one by id), created if it doesn't exist yet.
+    name="${NEON_PROJECT:-pulseboard}"
     project="${NEON_PROJECT_ID:-}"
     if [[ -z "$project" ]]; then
-      rows=()
-      while IFS= read -r line; do rows+=("$line"); done < <(neon projects list -o json | pixi run -q python -c '
-    import json, sys
+      project=$(neon projects list -o json | NAME="$name" pixi run -q python -c '
+    import json, os, sys
     d = json.load(sys.stdin)
-    for p in (d.get("projects", []) if isinstance(d, dict) else d):
-        print(p["id"] + "\t" + p.get("name", ""))')
-      if (( ${#rows[@]} == 0 )); then
-        echo "No Neon projects yet; creating one called pulseboard."
-        project=$(neon projects create --name pulseboard -o json | pixi run -q python -c '
+    ids = [p["id"] for p in (d.get("projects", []) if isinstance(d, dict) else d)
+           if p.get("name") == os.environ["NAME"]]
+    print(ids[0] if ids else "")')
+      if [[ -z "$project" ]]; then
+        echo "Creating the Neon project $name."
+        project=$(neon projects create --name "$name" -o json | pixi run -q python -c '
     import json, sys; d = json.load(sys.stdin); print((d.get("project") or d)["id"])')
-      elif (( ${#rows[@]} == 1 )); then
-        project="${rows[0]%%${tab}*}"
-      else
-        echo "Which Neon project holds Pulseboard's database?"
-        for i in "${!rows[@]}"; do printf '  %d) %s\n' $((i + 1)) "${rows[$i]#*${tab}} (${rows[$i]%%${tab}*})"; done
-        read -rp "Number: " n
-        project="${rows[$((n - 1))]%%${tab}*}"
       fi
     fi
     url=$(neon connection-string --project-id "$project" --pooled)
