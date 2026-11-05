@@ -9,6 +9,11 @@ python = "3.13.*"
 nodejs = ">=22"
 pytest = "*"
 cryptography = "*"
+# The Worker's own dependencies (worker/pyproject.toml), for the CPython tests,
+# plus httpx, which the tests drive the FastAPI app with.
+fastapi = "*"
+python-multipart = "*"
+httpx = "*"
 uv = ">=0.12.3"
 
 [tasks]

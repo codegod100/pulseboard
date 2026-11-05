@@ -1,5 +1,7 @@
 // Runs worker/src/entry.py under Pyodide in Node with a D1 stand-in over
-// node:sqlite, a canned fetch, and a stub of the `workers` SDK module.
+// node:sqlite, a canned fetch, and the real Workers Python SDK (its ASGI
+// adapter is what hands requests to FastAPI), with stand-ins for the two
+// modules only the Workers runtime provides.
 import { loadPyodide } from "pyodide";
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
@@ -28,7 +30,7 @@ const DB = {
 const ASSETS = { fetch: async (req) => new Response(`asset:${new URL(req.url).pathname}`, { status: 200 }) };
 
 const RSS = `<?xml version="1.0"?><rss><channel><title>T</title><item><title>Hello &amp; bye</title><link>https://x.example/1</link><guid>g1</guid><description>&lt;b&gt;hi&lt;/b&gt;&lt;script&gt;x&lt;/script&gt;</description><pubDate>Tue, 10 Jun 2025 04:00:00 GMT</pubDate></item></channel></rss>`;
-globalThis.fetch = async (url, init) => {
+const fakeFetch = async (url, init) => {
   url = String(url);
   if (url === "https://feeds.example/rss") {
     if (!(init.signal instanceof AbortSignal)) throw new Error("no signal");
@@ -39,30 +41,50 @@ globalThis.fetch = async (url, init) => {
 };
 
 const py = await loadPyodide();
+// Pyodide's own builds of pydantic-core and friends come from its CDN;
+// fastapi, starlette and the Workers SDK are pure Python, from PyPI.
+// The Worker's dependencies, as pyproject.toml lists them for pywrangler.
+const pyproject = fs.readFileSync(path.join(repo, "pyproject.toml"), "utf8");
+const deps = ["workers-runtime-sdk", ...JSON.parse(pyproject.match(/^dependencies\s*=\s*(\[[^\]]*\])/m)[1])];
+await py.loadPackage("micropip");
+py.globals.set("DEPS", py.toPy(deps));
+await py.runPythonAsync(`
+import micropip
+await micropip.install(list(DEPS))
+`);
+globalThis.fetch = fakeFetch;
 for (const f of ["entry.py", ...fs.readdirSync(path.join(src, "pulseboard")).filter(f => f.endsWith(".py")).map(f => "pulseboard/" + f)]) {
   py.FS.mkdirTree("/w/pulseboard");
   py.FS.writeFile("/w/" + f, fs.readFileSync(path.join(src, f), "utf8"));
 }
-py.FS.mkdirTree("/w/workers");
-py.FS.writeFile("/w/workers/__init__.py", `
+// What workerd provides to the SDK. waitUntil only runs a promise to the end.
+globalThis.__cfWorkers = { waitUntil: (p) => { Promise.resolve(p).catch((e) => { console.error(e); process.exitCode = 1; }); } };
+py.FS.writeFile("/w/_cloudflare_compat_flags.py", "def __getattr__(name):\n    return False\n");
+py.FS.writeFile("/w/_pyodide_entrypoint_helper.py", `
 import js
-class WorkerEntrypoint:
-    def __init__(self, ctx, env):
-        self.ctx, self.env = ctx, env
-class Response:
-    def __init__(self, body=None, status=None, headers=None):
-        if hasattr(body, "status") and not isinstance(body, (str, bytes)):
-            self.js = body
-        else:
-            from pyodide.ffi import to_js
-            self.js = js.Response.new(body, to_js({"status": status or 200, "headers": headers or {}}, dict_converter=js.Object.fromEntries))
+cloudflareWorkersModule = js.__cfWorkers
+cloudflareSocketsModule = None
+async def doAnImport(name):
+    if name == "cloudflare:workers":
+        return js.__cfWorkers
+    raise ImportError(name)
+def patch_env_helper(kwds):
+    yield
+def patchWaitUntil(ctx):
+    pass
 `);
 py.globals.set("ENV", { DB, ASSETS });
-py.globals.set("JSREQ", (u, init) => new Request(u, init));
+// Workers requests carry Host, which the app reads its origin from; Node's
+// Request does not add one, so put it back.
+py.globals.set("JSREQ", (u, init) => {
+  const req = new Request(u, init);
+  req.headers.set("host", new URL(u).host);
+  return req;
+});
 await py.runPythonAsync(`
 import sys; sys.path.insert(0, "/w")
 import js, json
-from entry import Default, WebCrypto, Http
+from entry import Default, WebCrypto, Http, app_for
 from pyodide.ffi import to_js
 from pulseboard import oauth
 
@@ -74,17 +96,17 @@ async def call(method, path, body=None, cookie=None, ctype="application/x-www-fo
     init = {"method": method, "headers": headers}
     if body is not None: init["body"] = body
     r = await w.fetch(JSREQ(O + path, to_js(init, dict_converter=js.Object.fromEntries)))
-    return int(r.js.status), str(await r.js.text()), r.js.headers
+    return int(r.status), str(await r.text()), r.headers
 
 s, b, h = await call("GET", "/")
 assert s == 307 and h.get("location") == "/auth/login", (s, b)
 s, b, h = await call("GET", "/pulseboard.wasm"); assert (s, b) == (200, "asset:/pulseboard.wasm"), (s, b)
-s, b, h = await call("GET", "/feeds"); assert s == 401
+s, b, h = await call("GET", "/feeds"); assert s == 401 and "error" in json.loads(b), (s, b)
 s, b, h = await call("GET", "/oauth-client-metadata.json")
 assert json.loads(b)["client_id"] == O + "/oauth-client-metadata.json"
 
 # A session, as the callback would create it.
-await w._app().store.create_session("tok", "did:plc:me", 9999999999)
+await app_for(ENV).store.create_session("tok", "did:plc:me", 9999999999)
 c = "a=b; pulseboard_session=tok"
 s, b, h = await call("GET", "/", cookie=c); assert (s, b) == (200, "asset:/"), (s, b)
 s, b, h = await call("POST", "/feeds", "url=https%3A%2F%2Ffeeds.example%2Frss", c)
@@ -95,13 +117,13 @@ s, b, h = await call("GET", "/feeds", cookie=c)
 feeds = json.loads(b); assert feeds[1]["title"] == "T" and feeds[0]["favicon_url"] == "", feeds
 s, b, h = await call("GET", "/articles?status=all", cookie=c)
 (a,) = json.loads(b); assert a["title"] == "Hello & bye" and a["published"] == "2025-06-10T04:00:00Z" and a["is_read"] is False, a
-s, b, h = await call("POST", "/read", f"id={a['id']}", c); assert s == 200
+s, b, h = await call("POST", "/read", f"id={a['id']}", c); assert s == 200, (s, b)
 s, b, h = await call("GET", "/unread", cookie=c); assert json.loads(b) == {"count": 0}, b
 s, b, h = await call("GET", "/articles?q=hello", cookie=c); assert len(json.loads(b)) == 1, b
 s, b, h = await call("DELETE", "/feeds?url=https%3A%2F%2Ffeeds.example%2Fgone", cookie=c); assert s == 200
 fd = js.FormData.new(); fd.append("opml", '<opml><body><outline text="x" xmlUrl="https://feeds.example/rss"/></body></opml>')
 r = await w.fetch(JSREQ(O + "/opml", to_js({"method": "POST", "body": fd, "headers": {"cookie": c}}, dict_converter=js.Object.fromEntries)))
-assert json.loads(str(await r.js.text()))["imported"] == 1
+assert json.loads(str(await r.text()))["imported"] == 1
 s, b, h = await call("GET", "/opml", cookie=c); assert "feeds.example/rss" in b and h.get("content-type").startswith("application/xml")
 await w.scheduled(None, None, None)
 

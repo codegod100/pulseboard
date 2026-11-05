@@ -1,17 +1,19 @@
 """The Worker: adapts Cloudflare's runtime (D1, fetch, WebCrypto, static
-assets) to the plain-Python reader in `pulseboard/`.
+assets) to the plain-Python reader in `pulseboard/`, and hands requests to its
+FastAPI app through the Workers ASGI adapter.
 
 Everything Workers-specific lives in this file, so the rest can be tested
 under CPython against SQLite.
 """
 
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import unquote
 
 import js
 from pyodide.ffi import JsProxy, to_js
-from workers import Response, WorkerEntrypoint
+from workers import WorkerEntrypoint, asgi
 
-from pulseboard.app import App, Req
+from pulseboard.api import ASSET_HEADER, create_api
+from pulseboard.app import App
 
 try:
     from pyodide.ffi import jsnull
@@ -114,42 +116,29 @@ class WebCrypto:
         return sig.to_bytes()
 
 
-class Default(WorkerEntrypoint):
-    def _app(self):
-        return App(D1(self.env.DB), Http(), WebCrypto())
+def app_for(env) -> App:
+    return App(D1(env.DB), Http(), WebCrypto())
 
+
+# Built once per isolate; each request gets an App over that request's env.
+api = create_api(lambda request: app_for(request.scope["env"]))
+
+
+class Default(WorkerEntrypoint):
     async def fetch(self, request):
         jsreq = getattr(request, "js_object", request)
-        url = urlsplit(str(jsreq.url))
-        method = str(jsreq.method).upper()
-        params = parse_qsl(url.query, keep_blank_values=True)
-        if method in ("POST", "PUT", "DELETE"):
-            ctype = str(jsreq.headers.get("content-type") or "")
-            if "application/x-www-form-urlencoded" in ctype or not ctype:
-                params += parse_qsl(str(await jsreq.text()), keep_blank_values=True)
-            elif "multipart/form-data" in ctype:
-                form = await jsreq.formData()
-                for pair in form.entries():
-                    k, v = pair.to_py() if isinstance(pair, JsProxy) else pair
-                    if isinstance(v, str):
-                        params.append((k, v))
-        req = Req(
-            method=method,
-            path=url.path.strip("/"),
-            params=params,
-            cookie=str(jsreq.headers.get("cookie") or ""),
-            origin=f"{url.scheme}://{url.netloc}",
-        )
-        resp = await self._app().handle(req)
-        if resp.asset is not None:
-            assets = _raw(self.env.ASSETS)
-            if resp.asset == "/" + req.path:
-                res = await assets.fetch(jsreq)
-            else:
-                res = await assets.fetch(js.Request.new(
-                    req.origin + resp.asset, _js({"method": "GET", "headers": jsreq.headers})))
-            return Response(res)
-        return Response(resp.body, status=resp.status, headers=resp.headers)
+        res = await asgi.fetch(api, jsreq, self.env)
+        path = _py(res.headers.get(ASSET_HEADER))
+        if not path:
+            return res
+        # The app said "serve this static file": fetch it from the assets
+        # binding, so the client bundle never passes through Python.
+        assets = _raw(self.env.ASSETS)
+        url = js.URL.new(jsreq.url)
+        if path == unquote(str(url.pathname)):
+            return await assets.fetch(jsreq)
+        return await assets.fetch(js.Request.new(
+            str(url.origin) + path, _js({"method": "GET", "headers": jsreq.headers})))
 
     async def scheduled(self, *args):
-        await self._app().scheduled()
+        await app_for(self.env).scheduled()

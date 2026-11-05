@@ -6,10 +6,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 
-from conftest import FakeHttp, Res, SoftCrypto, run
+from conftest import Api, FakeHttp, Res, SoftCrypto, run
 from test_feeds import ATOM, RSS
 
-from pulseboard.app import App, Req
 
 ORIGIN = "https://pulseboard.example.workers.dev"
 DID = "did:plc:abc123"
@@ -97,7 +96,11 @@ def oauth_server():
 
 
 def req(method, path, cookie="", **params):
-    return Req(method, path.strip("/"), list(params.items()), cookie, ORIGIN)
+    return method, path, cookie, params
+
+
+def App(db, http, crypto):
+    return Api(ORIGIN, db, http, crypto)
 
 
 def sign_in(app, state, handle="alice.test"):
@@ -113,7 +116,9 @@ def test_unauthenticated(db):
     http, _ = oauth_server()
     app = App(db, http, SoftCrypto())
     assert run(app.handle(req("GET", "/"))).headers["Location"] == "/auth/login"
-    assert run(app.handle(req("GET", "feeds"))).status == 401
+    denied = run(app.handle(req("GET", "feeds")))
+    assert denied.status == 401 and json.loads(denied.body) == {"error": "AT Protocol authentication required"}
+    assert run(app.handle(req("POST", "read", id="1"))).status == 401
     assert run(app.handle(req("GET", "pulseboard.wasm"))).asset == "/pulseboard.wasm"
     assert run(app.handle(req("GET", "health"))).status == 200
     meta = json.loads(run(app.handle(req("GET", "oauth-client-metadata.json"))).body)
@@ -133,6 +138,10 @@ def test_sign_in_and_read(db):
     assert again.status == 401
 
     assert run(app.handle(req("GET", "/", cookie))).asset == "/"
+    # Paths under the API are never static files.
+    missing = run(app.handle(req("GET", "feeds/nope", cookie)))
+    assert missing.status == 404 and missing.asset is None and json.loads(missing.body) == {"error": "not found"}
+    assert json.loads(run(app.handle(req("GET", "articles/x", cookie))).body) == {"error": "no such article"}
 
     added = json.loads(run(app.handle(req("POST", "feeds", cookie, url="https://feeds.example/rss"))).body)
     assert added == {"feed_url": "https://feeds.example/rss", "added": 2}

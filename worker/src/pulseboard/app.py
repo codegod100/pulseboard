@@ -1,22 +1,17 @@
-"""Routes. The same JSON API the Nim reader served, so clients need not care
-which one is behind them.
+"""The reader's services: feed refresh, sessions, and the JSON shapes the API
+returns. The routes themselves are in api.py.
 
-This module knows nothing about Workers: `handle` takes a `Req` and returns a
-`Resp`, and entry.py converts both ways. A `Resp` with `asset` set means "serve
-this path from the static assets" (the Qt web client).
+This module knows nothing about Workers or HTTP frameworks: `App` takes a
+database, an HTTP client and a signer, which entry.py (D1, fetch, WebCrypto)
+and the tests (SQLite, canned responses, `cryptography`) each provide.
 """
 
 import asyncio
-import json
 import logging
-import secrets
 import time
-from dataclasses import dataclass, field
 
-from . import oauth, pages
-from .feeds import FeedError, fetch_feed, USER_AGENT
-from .htmlclean import ScrapeError, extract_article, sanitize_fragment
-from .opml import OpmlFeed, parse_opml, render_opml
+from .feeds import FeedError, fetch_feed
+from .htmlclean import sanitize_fragment
 from .store import Store, iso_time
 
 log = logging.getLogger("pulseboard")
@@ -30,9 +25,6 @@ SESSION_RENEW_EVERY = 24 * 60 * 60
 SESSION_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
 COOKIE = "pulseboard_session"
 
-API_ROOTS = {"feeds", "articles", "unread", "opml", "refresh", "read",
-             "read-all", "fetch-content"}
-
 # How many feeds one request may fetch. Workers cap subrequests per invocation,
 # and each feed is one or more of them.
 MAX_FEEDS_PER_REQUEST = 40
@@ -42,58 +34,6 @@ FETCH_CONCURRENCY = 8
 # The client refreshes every time it opens; a feed fetched this recently (by
 # that or by the cron trigger) is not fetched again.
 FRESH_MINUTES = 10
-
-
-@dataclass
-class Req:
-    method: str
-    path: str  # without the leading or trailing slash
-    params: list[tuple[str, str]] = field(default_factory=list)  # query + form
-    cookie: str = ""
-    origin: str = ""
-
-    def param(self, name: str, default: str = "") -> str:
-        for k, v in self.params:
-            if k == name:
-                return v
-        return default
-
-    def int_param(self, name: str, default: int) -> int:
-        try:
-            return int(self.param(name))
-        except ValueError:
-            return default
-
-    def cookie_value(self, name: str) -> str:
-        for part in self.cookie.split(";"):
-            k, _, v = part.strip().partition("=")
-            if k == name:
-                return v
-        return ""
-
-
-@dataclass
-class Resp:
-    status: int = 200
-    body: str | bytes = ""
-    headers: dict = field(default_factory=dict)
-    asset: str | None = None
-
-
-def json_resp(data, status: int = 200) -> Resp:
-    return Resp(status, json.dumps(data), {"Content-Type": "application/json"})
-
-
-def fail(status: int, msg: str) -> Resp:
-    return json_resp({"error": msg}, status)
-
-
-def html_resp(markup: str, status: int = 200) -> Resp:
-    return Resp(status, markup, {"Content-Type": "text/html; charset=utf-8"})
-
-
-def redirect(location: str, status: int = 303, **headers) -> Resp:
-    return Resp(status, "", {"Location": location, **headers})
 
 
 def article_json(a: dict) -> dict:
@@ -177,239 +117,8 @@ class App:
 
     # --- auth ----------------------------------------------------------------
 
-    async def session_user(self, req: Req) -> str:
-        token = req.cookie_value(COOKIE)
+    async def session_user(self, token: str) -> str:
         if not token:
             return ""
         return await self.store.session_user(
             token, int(time.time()), SESSION_IDLE_LIMIT, SESSION_RENEW_EVERY)
-
-    async def auth_routes(self, req: Req) -> Resp | None:
-        path = req.path
-        if req.method != "GET":
-            return None
-        if path == "oauth-client-metadata.json":
-            return json_resp(oauth.client_metadata(req.origin))
-        if path == "auth/login":
-            return html_resp(pages.login_page())
-        if path == "auth/authorize":
-            identity = req.param("identity").strip()
-            if not identity or identity.startswith("did:"):
-                return html_resp(pages.login_page(identity, "Enter a handle, like you.bsky.social."), 400)
-            try:
-                url = await oauth.authorize(self.http, self.crypto, self.store, req.origin, identity)
-            except oauth.OAuthError as exc:
-                log.warning("auth/authorize failed for %s: %s", identity, exc)
-                return html_resp(pages.login_page(identity, str(exc)), 400)
-            except Exception as exc:
-                log.exception("auth/authorize failed for %s: %s", identity, exc)
-                return html_resp(pages.login_page(
-                    identity, "Couldn't start sign-in for that handle. Check it and try again."), 502)
-            return redirect(url)
-        if path == "auth/callback":
-            try:
-                did = await oauth.callback(self.http, self.crypto, self.store, req.origin, dict(req.params))
-            except oauth.OAuthError as exc:
-                log.warning("auth/callback failed: %s", exc)
-                return html_resp(pages.retry_page(), 401)
-            except Exception as exc:
-                log.exception("auth/callback failed: %s", exc)
-                return html_resp(pages.login_page(error="Sign-in failed. Please try again."), 401)
-            token = secrets.token_urlsafe(32)
-            await self.store.create_session(token, did, int(time.time()) + SESSION_IDLE_LIMIT)
-            return redirect("/", **{"Set-Cookie": (
-                f"{COOKIE}={token}; Path=/; HttpOnly; Secure; SameSite=Lax; "
-                f"Max-Age={SESSION_COOKIE_MAX_AGE}")})
-        if path == "auth/logout":
-            token = req.cookie_value(COOKIE)
-            if token:
-                await self.store.delete_session(token)
-            return redirect("/auth/login", **{"Set-Cookie": (
-                f"{COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0")})
-        if path == "health":
-            return json_resp({"ok": True})
-        return None
-
-    # --- routes --------------------------------------------------------------
-
-    async def handle(self, req: Req) -> Resp:
-        resp = await self.auth_routes(req)
-        if resp is not None:
-            return resp
-
-        root = req.path.split("/", 1)[0]
-        is_app = req.path in ("", "index.html")
-        if root not in API_ROOTS and not is_app:
-            # The client's own files (wasm, js, css, icons) are public: they
-            # are code, not data, and the browser must be able to load them
-            # to show the sign-in redirect at all.
-            return Resp(asset="/" + req.path) if req.method in ("GET", "HEAD") else fail(404, "not found")
-
-        user = await self.session_user(req)
-        if not user:
-            if is_app:
-                return redirect("/auth/login", 307)
-            return fail(401, "AT Protocol authentication required")
-        if is_app:
-            return Resp(asset="/")
-
-        method = req.method
-        try:
-            if method == "GET":
-                return await self.get(req, user)
-            if method == "POST":
-                return await self.post(req, user)
-            if method == "PUT" and root == "feeds":
-                return await self.edit_feed(req, user)
-            if method == "DELETE":
-                if root == "feeds" and req.param("url"):
-                    await self.store.unsubscribe(user, req.param("url"))
-                    return json_resp({"ok": True})
-                return fail(400, "url required")
-        except Exception as exc:
-            log.exception("%s /%s failed: %s", method, req.path, exc)
-            return fail(500, "internal error")
-        return fail(405, "method not allowed")
-
-    async def get(self, req: Req, user: str) -> Resp:
-        segs = req.path.split("/")
-        root = segs[0]
-        if root == "feeds":
-            return json_resp([feed_json(s) for s in await self.store.list_subscriptions(user)])
-        if root == "opml":
-            subs = await self.store.list_subscriptions(user, 5000)
-            body = render_opml([OpmlFeed(url=s["feed_url"], title=s["title"] or "",
-                                         site_url=s["site_url"] or "",
-                                         category=s["category"] or "") for s in subs])
-            return Resp(200, body, {
-                "Content-Type": "application/xml; charset=utf-8",
-                "Content-Disposition": "attachment; filename=pulseboard-subscriptions.opml",
-            })
-        if root == "articles":
-            if len(segs) == 2:
-                try:
-                    article_id = int(segs[1])
-                except ValueError:
-                    return fail(404, "no such article")
-                a = await self.store.get_article(user, article_id)
-                return json_resp(article_json(a)) if a else fail(404, "no such article")
-            limit = max(1, min(req.int_param("limit", 50), 500))
-            q = req.param("q")
-            if q:
-                try:
-                    rows = await self.store.search_articles(user, q, limit)
-                except Exception:
-                    rows = []  # FTS5 syntax error: no results, not a failure
-            else:
-                status = req.param("status")
-                rows = await self.store.list_articles(
-                    user, status if status in ("all", "read") else "unread",
-                    req.param("feed"), limit)
-            return json_resp([article_json(a) for a in rows])
-        if root == "unread":
-            return json_resp({"count": await self.store.unread_count(user)})
-        return fail(404, "not found")
-
-    async def edit_feed(self, req: Req, user: str) -> Resp:
-        """PUT /feeds: url names the subscription; new_url, title and category
-        replace its fields (new_url defaults to url, so a rename leaves it)."""
-        url = req.param("url").strip()
-        if not url or not await self.store.get_subscription(user, url):
-            return fail(404, "no such subscription")
-        new_url = req.param("new_url").strip() or url
-        if not new_url.startswith(("http://", "https://")):
-            return fail(400, "url must be http(s)")
-        if new_url != url and await self.store.get_subscription(user, new_url):
-            return fail(409, "already subscribed to that URL")
-        if new_url != url:
-            await self.store.upsert_feed(new_url)
-        await self.store.update_subscription(
-            user, url, new_url, req.param("title").strip(), req.param("category").strip())
-        if new_url == url:
-            return json_resp({"feed_url": url, "added": 0})
-        # The edit is saved either way; a fetch failure is reported alongside
-        # rather than as "error", which the client takes to mean nothing changed.
-        added, err = await self.refresh_feed(new_url)
-        if err:
-            return json_resp({"feed_url": new_url, "added": 0, "fetch_error": err})
-        return json_resp({"feed_url": new_url, "added": added})
-
-    async def post(self, req: Req, user: str) -> Resp:
-        root = req.path.split("/", 1)[0]
-        if root == "feeds":
-            url = req.param("url").strip()
-            if not url:
-                return fail(400, "url required")
-            if not url.startswith(("http://", "https://")):
-                return fail(400, "url must be http(s)")
-            # Subscribe first so a feed that fails to fetch is still listed,
-            # with its error visible, rather than vanishing.
-            await self.store.upsert_feed(url)
-            await self.store.subscribe(user, url, "", req.param("category"))
-            added, err = await self.refresh_feed(url)
-            if err:
-                return json_resp({"feed_url": url, "added": 0, "error": err})
-            return json_resp({"feed_url": url, "added": added})
-
-        if root == "opml":
-            source = req.param("opml")
-            if not source:
-                return fail(400, "OPML required")
-            if len(source) > 1_000_000:
-                return fail(413, "OPML is too large")
-            try:
-                imported = parse_opml(source)
-            except ValueError as exc:
-                return fail(400, f"invalid OPML: {exc}")
-            added, errors, urls = 0, [], []
-            for f in imported:
-                if not f.url.startswith(("http://", "https://")):
-                    errors.append({"feed_url": f.url, "error": "not an http(s) URL"})
-                    continue
-                await self.store.upsert_feed(f.url, f.title, f.site_url, f.description)
-                if await self.store.subscribe(user, f.url, f.title, f.category):
-                    added += 1
-                urls.append(f.url)
-            # Past the per-request cap, the next refresh or cron run fetches them.
-            errors += [{"feed_url": u, "error": e} for u, _, e in await self.refresh_many(urls) if e]
-            return json_resp({"imported": len(imported), "added": added, "errors": errors})
-
-        if root == "refresh":
-            minutes = None if req.param("force") == "1" else FRESH_MINUTES
-            results = await self.refresh_many(await self.store.stale_subscriptions(user, minutes))
-            return json_resp({
-                "added": sum(added for _, added, _ in results),
-                "errors": [{"feed_url": u, "error": e} for u, _, e in results if e],
-            })
-
-        if root == "read":
-            article_id = req.int_param("id", 0)
-            if not article_id:
-                return fail(400, "id required")
-            await self.store.set_read(user, article_id, req.param("undo") != "1")
-            return json_resp({"id": article_id})
-
-        if root == "read-all":
-            await self.store.mark_all_read(user, req.param("feed"))
-            return json_resp({"unread": await self.store.unread_count(user)})
-
-        if root == "fetch-content":
-            article_id = req.int_param("id", 0)
-            a = await self.store.get_article(user, article_id)
-            if not a or not a["url"]:
-                return fail(404, "no such article")
-            if not a["url"].startswith(("http://", "https://")):
-                return fail(400, "article has no http(s) URL")
-            try:
-                res = await self.http.request("GET", a["url"], headers={"User-Agent": USER_AGENT})
-                if res.status != 200:
-                    return fail(502, f"HTTP {res.status}")
-                text = extract_article(res.body.decode("utf-8", errors="replace"))
-            except ScrapeError as exc:
-                return fail(502, str(exc))
-            except Exception as exc:
-                return fail(502, f"fetching {a['url']}: {exc}")
-            await self.store.update_full_content(article_id, text)
-            return json_resp({"id": article_id, "content": text})
-
-        return fail(404, "not found")

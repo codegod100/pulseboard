@@ -7,15 +7,25 @@ opened.
 
 | | |
 |---|---|
-| `src/entry.py` | the only Workers-specific code: D1, `fetch`, WebCrypto and assets adapters |
-| `src/pulseboard/app.py` | routes; the same API the Nim reader served |
+| `src/entry.py` | the only Workers-specific code: D1, `fetch`, WebCrypto and assets adapters, and the hand-off to FastAPI through the Workers ASGI adapter |
+| `src/pulseboard/api.py` | routes, as a FastAPI app; the same API the Nim reader served |
+| `src/pulseboard/app.py` | feed refresh, sessions, and the JSON shapes the routes return |
 | `src/pulseboard/store.py` | feeds, subscriptions, articles, read state, sessions |
 | `src/pulseboard/feeds.py` | fetching, and parsing RSS, RDF, Atom and JSON Feed |
 | `src/pulseboard/htmlclean.py` | the sanitiser every article body goes through, and full-text extraction |
 | `src/pulseboard/oauth.py` | AT Protocol OAuth: PAR, PKCE, DPoP, then revoke; only the DID is kept |
 | `migrations/` | D1 schema |
 
-Only the standard library is used, so there is nothing to vendor.
+The routes are a [FastAPI](https://fastapi.tiangolo.com) app, run by the
+Workers Python runtime through its ASGI adapter. `pyproject.toml` lists FastAPI
+and python-multipart (for form bodies); pywrangler vendors them on `dev` and
+`deploy`. Everything else is the standard library.
+
+Two things keep it working under Pyodide. Every route and dependency is
+`async def`, because FastAPI runs plain functions on a thread pool and Pyodide
+has no threads. And the Qt client's files never go through FastAPI: a route
+that serves one answers with an empty response carrying `X-Pulseboard-Asset`,
+and `entry.py` swaps in the file from the assets binding.
 
 ## API
 
@@ -53,10 +63,13 @@ pixi run test-worker    # CPython
 pixi run test-pyodide   # Pyodide in Node
 ```
 
-The first suite runs the reader under CPython against SQLite with canned HTTP
+The first suite sends requests through the FastAPI app (with httpx) under
+CPython, against SQLite with canned HTTP
 and a fake AT Protocol authorization server. The second runs `entry.py` under
-Pyodide in Node, against stand-ins for D1 and the assets binding, and checks
-that a DPoP proof signed with WebCrypto verifies.
+Pyodide in Node, with FastAPI and the real Workers Python SDK installed by
+micropip, against stand-ins for D1 and the assets binding, and checks that a
+DPoP proof signed with WebCrypto verifies. It needs network access to PyPI and
+the Pyodide CDN.
 
 ## Deploying
 
