@@ -10,13 +10,15 @@ opened.
 | `src/entry.py` | the only Workers-specific code: D1, `fetch`, WebCrypto and assets adapters, and the hand-off to FastAPI through the Workers ASGI adapter |
 | `src/pulseboard/api.py` | routes, as a FastAPI app; the same API the Nim reader served |
 | `src/pulseboard/app.py` | feed refresh, sessions, and the JSON shapes the routes return |
-| `src/pulseboard/server.py` | the same routes as an ordinary server (FastAPI Cloud): Turso or SQLite, httpx, web/dist, a refresh loop |
-| `src/pulseboard/databases.py` | Turso over its HTTP API, a local SQLite file, and the migration runner the server uses |
+| `src/pulseboard/server.py` | the same routes as an ordinary server (FastAPI Cloud): Postgres or SQLite, httpx, web/dist, a refresh loop |
+| `src/pulseboard/databases.py` | Postgres (Neon) and local SQLite adapters, and the migration runner the server uses |
+| `migrations-postgres/` | the Postgres schema: the same tables, with a tsvector column for search |
+| `scripts/d1_to_postgres.py` | copies D1's data into Postgres (`just migrate-d1`) |
 | `src/pulseboard/store.py` | feeds, subscriptions, articles, read state, sessions |
 | `src/pulseboard/feeds.py` | fetching, and parsing RSS, RDF, Atom and JSON Feed |
 | `src/pulseboard/htmlclean.py` | the sanitiser every article body goes through, and full-text extraction |
 | `src/pulseboard/oauth.py` | AT Protocol OAuth: PAR, PKCE, DPoP, then revoke; only the DID is kept |
-| `migrations/` | D1 schema |
+| `migrations/` | the SQLite schema (D1, local files) |
 
 The routes are a [FastAPI](https://fastapi.tiangolo.com) app, run by the
 Workers Python runtime through its ASGI adapter. `pyproject.toml` lists FastAPI
@@ -61,7 +63,7 @@ and `/` redirects to `/auth/login`.
 
 ```
 pixi run test           # both suites below
-pixi run test-worker    # CPython
+pixi run test-worker    # CPython; on Postgres too if PULSEBOARD_TEST_POSTGRES is set
 pixi run test-pyodide   # Pyodide in Node
 ```
 

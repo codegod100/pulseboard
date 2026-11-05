@@ -2,11 +2,19 @@
 sqlite3, fetch over a table of canned responses, WebCrypto over `cryptography`,
 and a client that sends requests through the FastAPI app as the Workers ASGI
 adapter would.
+
+The `db` fixture runs each test on SQLite and, when PULSEBOARD_TEST_POSTGRES
+names a Postgres server (an admin URL such as
+postgresql://postgres@127.0.0.1:5432/postgres), again on a fresh database
+there. Without it the Postgres runs are skipped.
 """
 
 import asyncio
+import os
 import pathlib
+import secrets
 import sys
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import pytest
@@ -108,10 +116,42 @@ class Api:
         await self.app.scheduled(*args, **kwargs)
 
 
-@pytest.fixture
-def db():
-    return SqliteDb()
+@pytest.fixture(params=["sqlite", "postgres"])
+def db(request):
+    if request.param == "sqlite":
+        yield SqliteDb()
+        return
+    pg = databases.PostgresDb(new_postgres_database(request))
+    run(pg.open())
+    run(databases.migrate(pg))
+    yield pg
+    run(pg.close())
+
+
+# One loop for the whole session: a Postgres pool belongs to the loop it was
+# opened on, and tests call run() many times.
+LOOP = asyncio.new_event_loop()
 
 
 def run(coro):
-    return asyncio.run(coro)
+    return LOOP.run_until_complete(coro)
+
+
+PG_ADMIN = os.environ.get("PULSEBOARD_TEST_POSTGRES", "")
+
+
+def new_postgres_database(request) -> str:
+    """A fresh, empty database for one test; dropped afterwards."""
+    if not PG_ADMIN:
+        pytest.skip("PULSEBOARD_TEST_POSTGRES is not set")
+    import psycopg
+    name = "pulseboard_test_" + secrets.token_hex(4)
+    with psycopg.connect(PG_ADMIN, autocommit=True) as conn:
+        conn.execute(f"CREATE DATABASE {name}")
+
+    def drop():
+        with psycopg.connect(PG_ADMIN, autocommit=True) as conn:
+            conn.execute(f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+    request.addfinalizer(drop)
+    parts = urlsplit(PG_ADMIN)
+    return urlunsplit(parts._replace(path="/" + name))

@@ -9,11 +9,13 @@ python = "3.13.*"
 nodejs = ">=22"
 pytest = "*"
 cryptography = "*"
-# The Worker's own dependencies (worker/pyproject.toml), for the CPython tests,
-# plus httpx, which the tests drive the FastAPI app with.
+# The server's dependencies (pyproject.toml), for the CPython tests and the D1
+# copy script; httpx also drives the FastAPI app in the tests.
 fastapi = "*"
 python-multipart = "*"
 httpx = "*"
+psycopg = "*"
+psycopg-pool = "*"
 uv = ">=0.12.3"
 
 [tasks]
@@ -29,6 +31,7 @@ build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from we
 # --- FastAPI Cloud (the server in main.py; see readme) ---
 serve = { cmd = "uv run --frozen fastapi dev", description = "Run the server locally against a local SQLite file, with reload" }
 deploy-cloud = { cmd = "git pull --ff-only && pixi run test-worker && uv run --frozen fastapi deploy", description = "Pull main, test, then deploy to FastAPI Cloud (signs in through the browser the first time)" }
+migrate-d1 = { cmd = "python scripts/d1_to_postgres.py --d1 pulseboard", cwd = "worker", description = "Copy feeds, subscriptions, articles and read state from Cloudflare D1 into DATABASE_URL (Neon)" }
 
 # --- Cloudflare (run `pixi run login` once) ---
 # dev and deploy go through pywrangler, which vendors the Workers Python SDK

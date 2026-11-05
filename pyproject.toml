@@ -10,6 +10,7 @@ dependencies = [
     "httpx",
     "cryptography",
     "python-multipart",
+    "psycopg[binary,pool]",
 ]
 
 [tool.fastapi]

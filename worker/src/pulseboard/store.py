@@ -1,11 +1,15 @@
-"""Feeds, subscriptions, articles and read state on D1.
+"""Feeds, subscriptions, articles and read state, on SQLite (D1, local files)
+or Postgres (Neon).
 
 Ported from the Nim reader's stores. Read state is per-user and lives in its
 own table, so "the article list" is always a LEFT JOIN: an article with no
 read_state row is unread.
 
 `db` is anything with the four async methods below. The Worker passes a D1
-adapter; the tests pass one over the standard library's sqlite3.
+adapter, the FastAPI Cloud server a Postgres one, the tests either. SQL uses
+`?` placeholders throughout; the Postgres adapter rewrites them. Where the two
+dialects differ (the clock, intervals, full-text search) the query asks
+`db.dialect`, which defaults to SQLite.
 
     all(sql, params) -> list[dict]
     first(sql, params) -> dict | None
@@ -43,9 +47,44 @@ def iso_time(s: str | None) -> str:
     return s.replace(" ", "T", 1) + ("" if s.endswith("Z") else "Z")
 
 
+class SqliteDialect:
+    now = "CURRENT_TIMESTAMP"
+
+    @staticmethod
+    def ago(minutes: int) -> tuple[str, str]:
+        """SQL for "now minus `minutes`", and its one parameter."""
+        return "datetime('now', ?)", f"-{int(minutes)} minutes"
+
+    # The query goes to FTS5 as-is, so a stray quote is a syntax error:
+    # callers treat an error as no results.
+    search_join = """JOIN (SELECT rowid, rank FROM articles_fts
+                    WHERE articles_fts MATCH ?) m ON m.rowid = a.id"""
+    search_order = "m.rank"
+
+
+class PostgresDialect:
+    # Times are UTC in `timestamp` columns, as SQLite keeps them.
+    now = "(now() AT TIME ZONE 'utc')"
+
+    @staticmethod
+    def ago(minutes: int) -> tuple[str, str]:
+        return "((now() AT TIME ZONE 'utc') - CAST(? AS interval))", f"{int(minutes)} minutes"
+
+    # websearch_to_tsquery takes what people type ("quoted phrases", -not, or)
+    # and never raises on it.
+    search_join = """JOIN (SELECT id, ts_rank(search, q) AS rank
+                    FROM articles, websearch_to_tsquery('english', ?) q
+                    WHERE search @@ q) m ON m.id = a.id"""
+    search_order = "m.rank DESC, a.id DESC"
+
+
+SQLITE = SqliteDialect()
+
+
 class Store:
     def __init__(self, db):
         self.db = db
+        self.d = getattr(db, "dialect", SQLITE)
 
     # --- articles ------------------------------------------------------------
 
@@ -75,17 +114,14 @@ class Store:
         return await self.db.all(sql, params)
 
     async def search_articles(self, user_did: str, query: str, limit: int = 50) -> list[dict]:
-        """Full-text search over the user's subscriptions. The query goes to
-        FTS5 as-is, so a stray quote is a syntax error: callers treat an error
-        as no results."""
+        """Full-text search over the user's subscriptions."""
         if not query.strip():
             return []
         return await self.db.all(
             f"""SELECT {ARTICLE_COLUMNS} {ARTICLE_FROM}
               JOIN subscriptions s ON s.feed_url = a.feed_url AND s.user_did = ?
-              JOIN (SELECT rowid, rank FROM articles_fts
-                    WHERE articles_fts MATCH ?) m ON m.rowid = a.id
-              ORDER BY m.rank LIMIT ?""",
+              {self.d.search_join}
+              ORDER BY {self.d.search_order} LIMIT ?""",
             [user_did, user_did, query, limit],
         )
 
@@ -125,8 +161,8 @@ class Store:
 
     async def set_read(self, user_did: str, article_id: int, is_read: bool):
         await self.db.run(
-            """INSERT INTO read_state (user_did, article_id, is_read, read_at)
-               VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            f"""INSERT INTO read_state (user_did, article_id, is_read, read_at)
+               VALUES (?, ?, ?, {self.d.now})
                ON CONFLICT(user_did, article_id) DO UPDATE SET
                  is_read = excluded.is_read, read_at = excluded.read_at""",
             [user_did, article_id, 1 if is_read else 0],
@@ -137,20 +173,20 @@ class Store:
         # wrong clears the whole account instead of one feed.
         if feed_url:
             await self.db.run(
-                """INSERT INTO read_state (user_did, article_id, is_read, read_at)
-                   SELECT ?, a.id, 1, CURRENT_TIMESTAMP FROM articles a
+                f"""INSERT INTO read_state (user_did, article_id, is_read, read_at)
+                   SELECT ?, a.id, 1, {self.d.now} FROM articles a
                    WHERE a.feed_url = ?
                    ON CONFLICT(user_did, article_id) DO UPDATE SET
-                     is_read = 1, read_at = CURRENT_TIMESTAMP""",
+                     is_read = 1, read_at = {self.d.now}""",
                 [user_did, feed_url],
             )
         else:
             await self.db.run(
-                """INSERT INTO read_state (user_did, article_id, is_read, read_at)
-                   SELECT ?, a.id, 1, CURRENT_TIMESTAMP FROM articles a
+                f"""INSERT INTO read_state (user_did, article_id, is_read, read_at)
+                   SELECT ?, a.id, 1, {self.d.now} FROM articles a
                    JOIN subscriptions s ON s.feed_url = a.feed_url AND s.user_did = ?
                    ON CONFLICT(user_did, article_id) DO UPDATE SET
-                     is_read = 1, read_at = CURRENT_TIMESTAMP""",
+                     is_read = 1, read_at = {self.d.now}""",
                 [user_did, user_did],
             )
 
@@ -188,7 +224,7 @@ class Store:
 
     async def mark_fetched(self, feed_url: str, etag: str = "", last_modified: str = ""):
         await self.db.run(
-            """UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP,
+            f"""UPDATE feeds SET last_fetched_at = {self.d.now},
                  last_error = NULL, error_count = 0,
                  etag = ?, last_modified = ? WHERE feed_url = ?""",
             [etag or None, last_modified or None, feed_url],
@@ -212,16 +248,17 @@ class Store:
                WHERE s.user_did = ?"""
         params: list = [user_did]
         if minutes is not None:
-            sql += """ AND (f.last_fetched_at IS NULL
-                            OR f.last_fetched_at < datetime('now', ?))"""
-            params.append(f"-{int(minutes)} minutes")
+            cutoff, arg = self.d.ago(minutes)
+            sql += f""" AND (f.last_fetched_at IS NULL
+                            OR f.last_fetched_at < {cutoff})"""
+            params.append(arg)
         sql += " ORDER BY f.last_fetched_at IS NOT NULL, f.last_fetched_at"
         rows = await self.db.all(sql, params)
         return [r["feed_url"] for r in rows]
 
     async def mark_fetch_error(self, feed_url: str, error: str):
         await self.db.run(
-            """UPDATE feeds SET last_fetched_at = CURRENT_TIMESTAMP,
+            f"""UPDATE feeds SET last_fetched_at = {self.d.now},
                  last_error = ?, error_count = error_count + 1 WHERE feed_url = ?""",
             [error, feed_url],
         )
@@ -229,14 +266,14 @@ class Store:
     async def feeds_to_fetch(self, older_than_minutes: int, limit: int) -> list[str]:
         """Feeds due for a refresh, oldest first. Feeds that keep failing drop
         out so a dead URL does not take a slot every cycle."""
+        cutoff, arg = self.d.ago(older_than_minutes)
         rows = await self.db.all(
-            """SELECT feed_url FROM feeds
+            f"""SELECT feed_url FROM feeds
                WHERE subscriber_count > 0 AND error_count < 10
-                 AND (last_fetched_at IS NULL
-                      OR last_fetched_at < datetime('now', ?))
+                 AND (last_fetched_at IS NULL OR last_fetched_at < {cutoff})
                ORDER BY last_fetched_at IS NOT NULL, last_fetched_at
                LIMIT ?""",
-            [f"-{int(older_than_minutes)} minutes", limit],
+            [arg, limit],
         )
         return [r["feed_url"] for r in rows]
 
@@ -323,7 +360,7 @@ class Store:
                FROM subscriptions s
                LEFT JOIN feeds f ON f.feed_url = s.feed_url
                WHERE s.user_did = ?
-               ORDER BY COALESCE(s.title, f.title, s.feed_url) COLLATE NOCASE
+               ORDER BY lower(COALESCE(s.title, f.title, s.feed_url))
                LIMIT ?""",
             [user_did, limit],
         )
@@ -332,7 +369,7 @@ class Store:
 
     async def create_session(self, token: str, did: str, expires_at: int):
         await self.db.batch([
-            ("INSERT OR IGNORE INTO users (did) VALUES (?)", [did]),
+            ("INSERT INTO users (did) VALUES (?) ON CONFLICT DO NOTHING", [did]),
             ("INSERT INTO web_sessions (token, user_did, expires_at) VALUES (?, ?, ?)",
              [token, did, expires_at]),
         ])

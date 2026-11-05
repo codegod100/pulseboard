@@ -2,8 +2,8 @@
 uvicorn runs). The routes are the same api.py the Worker serves; this module
 supplies what Cloudflare otherwise would:
 
-- storage: Turso when TURSO_DATABASE_URL is set, else a local SQLite file
-  (PULSEBOARD_DB, default pulseboard.db), migrated on startup;
+- storage: Postgres (Neon) when DATABASE_URL is set, else a local SQLite
+  file (PULSEBOARD_DB, default pulseboard.db), migrated on startup;
 - outgoing HTTP: httpx;
 - DPoP signing: `cryptography` instead of WebCrypto;
 - the Qt client: files from web/dist (PULSEBOARD_STATIC to override);
@@ -32,7 +32,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .api import ASSET_HEADER, create_api
 from .app import App
-from .databases import LibsqlDb, SqliteDb, migrate
+from .databases import PostgresDb, SqliteDb, migrate
 from .oauth import b64url
 
 log = logging.getLogger("pulseboard")
@@ -79,12 +79,12 @@ class Crypto:
         return r.to_bytes(32, "big") + s.to_bytes(32, "big")
 
 
-def open_db(client: httpx.AsyncClient):
-    url = os.environ.get("TURSO_DATABASE_URL", "")
+def open_db():
+    url = os.environ.get("DATABASE_URL", "")
     if url:
-        return LibsqlDb(client, url, os.environ.get("TURSO_AUTH_TOKEN", ""))
+        return PostgresDb(url)
     path = os.environ.get("PULSEBOARD_DB", "pulseboard.db")
-    log.warning("TURSO_DATABASE_URL is not set; using the local SQLite file %s", path)
+    log.warning("DATABASE_URL is not set; using the local SQLite file %s", path)
     return SqliteDb(path)
 
 
@@ -120,7 +120,8 @@ def build(db=None, http_client: httpx.AsyncClient | None = None,
     async def lifespan(api: FastAPI):
         client = http_client or httpx.AsyncClient(
             follow_redirects=True, timeout=FETCH_TIMEOUT)
-        database = db or open_db(client)
+        database = db or open_db()
+        await database.open()
         applied = await migrate(database)
         if applied:
             log.info("applied migrations: %s", ", ".join(applied))

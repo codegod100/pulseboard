@@ -2,6 +2,8 @@ import base64
 import json
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
+
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
@@ -272,7 +274,7 @@ def test_opml_import_and_cron(db):
     run(app.scheduled())
     assert len(http.calls) == before
     # ...until it is.
-    run(db.run("UPDATE feeds SET last_fetched_at = datetime('now', '-2 hours')"))
+    run(db.run("UPDATE feeds SET last_fetched_at = ?", ["2000-01-01 00:00:00"]))
     run(app.scheduled())
     assert len(http.calls) == before + 2
 
@@ -295,6 +297,8 @@ def test_sign_in_rejects_bad_handle(db):
 def test_import_from_modal(db, tmp_path):
     """The import script's SQL brings subscriptions back, and read state
     reattaches to articles when their feed is fetched again."""
+    if not hasattr(db, "conn"):
+        pytest.skip("the Modal import emits SQLite")
     import sqlite3
     import sys
     sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent / "scripts"))
