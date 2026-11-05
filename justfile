@@ -43,7 +43,6 @@ cloud:
 
     read -rp "Copy feeds, subscriptions, articles and read state from Cloudflare D1 now? [y/N] " copy
     if [[ "$copy" =~ ^[Yy] ]]; then
-      npx --yes wrangler@4 whoami >/dev/null 2>&1 || npx --yes wrangler@4 login
       DATABASE_URL="$url" pixi run migrate-d1
     fi
     # The first deploy signs in to FastAPI Cloud and creates (or links) the app;

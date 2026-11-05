@@ -134,3 +134,44 @@ def test_copy_from_d1(request, tmp_path):
         assert run(pg.first("SELECT max(id) AS m FROM subscriptions"))["m"] == 3
     finally:
         run(pg.close())
+
+
+def test_d1_source_runs_wrangler_outside_the_worker(tmp_path, monkeypatch, capsys):
+    """Wrangler is asked by name from an empty directory (not next to
+    wrangler.toml and its placeholder id), signs in when needed, and a
+    missing database means nothing to copy."""
+    import os
+    import sys
+    sys.path.insert(0, str(databases.MIGRATIONS.parent / "scripts"))
+    import d1_to_postgres
+
+    log = tmp_path / "calls"
+    fake = tmp_path / "wrangler"
+    fake.write_text(f"""#!/bin/sh
+echo "$PWD $*" >> {log}
+[ -e wrangler.toml ] && {{ echo "next to wrangler.toml" >&2; exit 1; }}
+case "$1" in
+  whoami) [ -e {tmp_path}/signed-in ] && echo "You are logged in" || echo "You are not authenticated.";;
+  login) touch {tmp_path}/signed-in;;
+  d1) case "$2" in
+        list) echo '[{{"name": "other"}}, {{"name": "pulseboard"}}]';;
+        execute) echo '[{{"results": [{{"did": "did:plc:a"}}], "success": true}}]';;
+      esac;;
+esac
+""")
+    fake.chmod(0o755)
+    monkeypatch.setattr(d1_to_postgres, "WRANGLER", [str(fake)])
+    monkeypatch.chdir(databases.MIGRATIONS.parent)  # where wrangler.toml is
+    src = d1_to_postgres.D1Source("pulseboard")
+    assert src.query("SELECT * FROM users") == [{"did": "did:plc:a"}]
+    calls = log.read_text().splitlines()
+    assert [c.split(" ", 1)[1] for c in calls[:3]] == ["whoami", "login", "d1 list --json"]
+    assert all(not c.startswith(str(databases.MIGRATIONS.parent) + " ") for c in calls)
+
+    try:
+        d1_to_postgres.D1Source("missing")
+    except d1_to_postgres.NoSuchDatabase as exc:
+        assert "other, pulseboard" in str(exc)
+    else:
+        raise AssertionError("expected NoSuchDatabase")
+    assert os.path.exists(tmp_path / "signed-in")
