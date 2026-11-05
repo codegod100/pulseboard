@@ -26,6 +26,10 @@ test = { depends-on = ["test-worker", "test-pyodide"], description = "Run every 
 web-toolchain = { cmd = "bash web/toolchain.sh", description = "Set up Emscripten and Qt for WebAssembly in web/.qt (once; compiles Qt)" }
 build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from web/src and web/qml with Qt for WebAssembly" }
 
+# --- FastAPI Cloud (the server in main.py; see readme) ---
+serve = { cmd = "uv run --frozen fastapi dev", description = "Run the server locally against a local SQLite file, with reload" }
+deploy-cloud = { cmd = "git pull --ff-only && pixi run test-worker && uv run --frozen fastapi deploy", description = "Pull main, test, then deploy to FastAPI Cloud (signs in through the browser the first time)" }
+
 # --- Cloudflare (run `pixi run login` once) ---
 # dev and deploy go through pywrangler, which vendors the Workers Python SDK
 # into worker/python_modules before handing over to wrangler.

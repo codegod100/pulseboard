@@ -82,3 +82,35 @@ jobs:
       - name: Deploy
         if: steps.creds.outputs.ready == 'true'
         run: pixi run --locked deploy
+
+  deploy-fastapi-cloud:
+    name: Deploy to FastAPI Cloud
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      FASTAPI_CLOUD_TOKEN: ${{ secrets.FASTAPI_CLOUD_TOKEN }}
+      FASTAPI_CLOUD_APP_ID: ${{ secrets.FASTAPI_CLOUD_APP_ID }}
+    steps:
+      - name: Check deployment credentials
+        id: creds
+        # Without the secrets the server is deployed by hand with
+        # `just deploy-cloud`, so this is a skip, not a failure.
+        run: |
+          if [[ -z "$FASTAPI_CLOUD_TOKEN" || -z "$FASTAPI_CLOUD_APP_ID" ]]; then
+            echo "::notice::No FASTAPI_CLOUD_TOKEN / FASTAPI_CLOUD_APP_ID secrets; skipping deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.creds.outputs.ready == 'true'
+
+      - uses: astral-sh/setup-uv@v7
+        if: steps.creds.outputs.ready == 'true'
+
+      - name: Deploy
+        if: steps.creds.outputs.ready == 'true'
+        run: uv run --frozen fastapi deploy

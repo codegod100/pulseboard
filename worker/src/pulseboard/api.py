@@ -4,12 +4,12 @@ clients need not care which one is behind them.
 `create_api` takes a function from the request to an `App`, so the Worker can
 build one over D1 and fetch while the tests build one over SQLite. Nothing here
 is Workers-specific: entry.py hands requests over through the Workers ASGI
-adapter.
+adapter, and server.py runs the same routes as an ordinary server.
 
 The Qt web client's files are not served from here. A route that wants a
 static file answers with an empty response carrying `ASSET_HEADER`, and
-entry.py swaps in the file from the assets binding, so a multi-megabyte wasm
-bundle never passes through Python.
+whoever runs the app swaps in the file: entry.py from the assets binding (so
+the wasm bundle never passes through Pyodide), server.py from web/dist.
 """
 
 import logging
@@ -84,7 +84,15 @@ async def services(request: Request) -> App:
 
 
 def origin(request: Request) -> str:
-    return f"{request.url.scheme}://{request.url.netloc}"
+    """Where the reader is served from, which AT Protocol sign-in names as
+    the client. Pinned when the server knows it; behind a proxy (FastAPI
+    Cloud), from the X-Forwarded headers; else the request URL."""
+    pinned = getattr(request.app.state, "public_origin", "")
+    if pinned:
+        return pinned
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
+    return f"{proto or request.url.scheme}://{host or request.url.netloc}"
 
 
 class NotSignedIn(Exception):
@@ -117,11 +125,13 @@ def session_cookie(token: str, max_age: int) -> str:
     return f"{COOKIE}={token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age={max_age}"
 
 
-def create_api(make_app: Callable[[Request], App]) -> FastAPI:
+def create_api(make_app: Callable[[Request], App], lifespan=None,
+               public_origin: str = "") -> FastAPI:
     # No generated docs: the API is for the Qt client, and /docs would only
     # be one more path to keep behind sign-in.
-    api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     api.state.make_app = make_app
+    api.state.public_origin = public_origin
     install_error_handlers(api)
     add_routes(api)
     return api

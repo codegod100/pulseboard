@@ -6,7 +6,6 @@ adapter would.
 
 import asyncio
 import pathlib
-import sqlite3
 import sys
 
 import httpx
@@ -18,34 +17,19 @@ from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from pulseboard import databases  # noqa: E402
 from pulseboard.api import ASSET_HEADER, create_api  # noqa: E402
 from pulseboard.app import App  # noqa: E402
 from pulseboard.oauth import b64url  # noqa: E402
 
 
-class SqliteDb:
+class SqliteDb(databases.SqliteDb):
+    """An in-memory database with the schema already applied."""
+
     def __init__(self):
-        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
+        super().__init__(":memory:")
         for migration in sorted((ROOT / "migrations").glob("*.sql")):
             self.conn.executescript(migration.read_text())
-
-    async def all(self, sql, params=()):
-        return [dict(r) for r in self.conn.execute(sql, list(params)).fetchall()]
-
-    async def first(self, sql, params=()):
-        rows = await self.all(sql, params)
-        return rows[0] if rows else None
-
-    async def run(self, sql, params=()):
-        cur = self.conn.execute(sql, list(params))
-        self.conn.commit()
-        return cur.rowcount
-
-    async def batch(self, statements):
-        with self.conn:
-            for sql, params in statements:
-                self.conn.execute(sql, list(params))
 
 
 class Res:

@@ -1,0 +1,16 @@
+# The reader as an ordinary FastAPI server, for FastAPI Cloud (`fastapi deploy`
+# from this directory). The code lives in worker/src; main.py puts it on the
+# path. The Cloudflare Worker build reads worker/pyproject.toml instead.
+[project]
+name = "pulseboard"
+version = "0.3.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]",
+    "httpx",
+    "cryptography",
+    "python-multipart",
+]
+
+[tool.fastapi]
+entrypoint = "main:app"

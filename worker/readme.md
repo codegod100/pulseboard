@@ -10,6 +10,8 @@ opened.
 | `src/entry.py` | the only Workers-specific code: D1, `fetch`, WebCrypto and assets adapters, and the hand-off to FastAPI through the Workers ASGI adapter |
 | `src/pulseboard/api.py` | routes, as a FastAPI app; the same API the Nim reader served |
 | `src/pulseboard/app.py` | feed refresh, sessions, and the JSON shapes the routes return |
+| `src/pulseboard/server.py` | the same routes as an ordinary server (FastAPI Cloud): Turso or SQLite, httpx, web/dist, a refresh loop |
+| `src/pulseboard/databases.py` | Turso over its HTTP API, a local SQLite file, and the migration runner the server uses |
 | `src/pulseboard/store.py` | feeds, subscriptions, articles, read state, sessions |
 | `src/pulseboard/feeds.py` | fetching, and parsing RSS, RDF, Atom and JSON Feed |
 | `src/pulseboard/htmlclean.py` | the sanitiser every article body goes through, and full-text extraction |
