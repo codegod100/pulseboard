@@ -33,13 +33,15 @@ whole setup:
 just cloud
 ```
 
-It pulls main and runs the tests, asks for the Neon **pooled** connection
-string (Neon console > your project > Connect > tick "Connection pooling";
-it looks like `postgresql://user:pass@ep-…-pooler.….neon.tech/neondb?sslmode=require`),
-offers to copy the existing data from Cloudflare D1, then deploys, stores the
-string on the app as the secret `DATABASE_URL`, and deploys again so the app
-picks it up. The first deploy signs you in to FastAPI Cloud in the browser.
-Set `DATABASE_URL` in your shell first to skip the prompt.
+There is nothing to paste: every sign-in happens in the browser. It pulls
+main and runs the tests, signs you in to Neon (`neonctl login`) and looks up
+your project's **pooled** connection string itself (asking which project if
+you have several, creating one called `pulseboard` if you have none; set
+`NEON_PROJECT_ID` to skip the question), offers to copy the existing data from
+Cloudflare D1 (signing you in to Cloudflare if needed), then deploys to
+FastAPI Cloud (signing you in there the first time), stores the string on the
+app as the secret `DATABASE_URL`, and deploys again so the app picks it up.
+It needs Node (for `npx neonctl` and `npx wrangler`), pixi and uv.
 
 Later deploys are `just deploy-cloud`. To copy D1 into Neon on its own:
 `DATABASE_URL=… just migrate-d1` (wrangler signs in to Cloudflare if needed;
