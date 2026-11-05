@@ -36,10 +36,13 @@ Item {
         cursorShape: Qt.PointingHandCursor
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         onClicked: Reader.open(root.index)
-        onContainsMouseChanged: Reader.hoverLink(containsMouse && root.hasLink ? root.url : "")
-        Component.onDestruction: if (containsMouse) Reader.hoverLink("")
+        // Moving between rows, the row left can say so after the row entered: it
+        // only clears the link if it is still its own.
+        onContainsMouseChanged: if (containsMouse) Reader.hoverLink(root.hasLink ? root.url : "")
+                                else Reader.leaveLink(root.url)
+        Component.onDestruction: if (containsMouse) Reader.leaveLink(root.url)
     }
-    ListView.onPooled: if (area.containsMouse) Reader.hoverLink("")
+    ListView.onPooled: if (area.containsMouse) Reader.leaveLink(root.url)
     Column {
         id: content
         x: root.width < 860 ? 16 : 20

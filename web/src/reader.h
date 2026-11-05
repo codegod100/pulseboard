@@ -63,6 +63,7 @@ public:
     Q_INVOKABLE void toggleRead(int row);
     Q_INVOKABLE void open(int row);               // follow the link, mark it read
     Q_INVOKABLE void hoverLink(const QString &url); // the link under the pointer, "" for none
+    Q_INVOKABLE void leaveLink(const QString &url); // the pointer left the row with this link
     Q_INVOKABLE void markAllRead();               // the feed shown, or everything
     Q_INVOKABLE void retry();
 
@@ -103,6 +104,7 @@ private:
 
     int m_unread = 0;
     int m_sel = -1;
+    QString m_hoverUrl;      // what hoverLink last gave the page
     QString m_selUrl;        // so the selection survives a reload of the feeds
     int m_status = Unread;
     QString m_search;

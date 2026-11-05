@@ -92,6 +92,21 @@ const SHOTS = process.env.SHOTS;
     assert.strictEqual(page.url(), BASE + "/", "the link around the canvas must not navigate");
   });
 
+  await step("moving between rows keeps the link of the row under the pointer", async () => {
+    // The row left can report it after the row entered; it must not clear the new row's link.
+    const s = await state();
+    const k = s.articles.findIndex((a, i) => a.hasLink && s.articles[i + 1]?.hasLink);
+    const y0 = 56 + 12 + 36 + 12 + 1 + 50 + 115 * k, y1 = y0 + 115;   // two rows with links, one above the other
+    for (let i = 0; i < 6; i++) {
+      const [from, to, want] = i % 2 ? [y1, y0, s.articles[k].url] : [y0, y1, s.articles[k + 1].url];
+      await page.mouse.move(300, from);
+      await page.mouse.move(300, to, { steps: 4 });
+      await page.waitForTimeout(150);
+      assert.strictEqual(await page.evaluate(() => window.pbHoverLink), want, "move " + i);
+    }
+    await page.mouse.move(300, 20);
+  });
+
   await step("typing in the search box and pressing Enter searches", async () => {
     await page.mouse.click(200, 56 + 12 + 18);
     await page.keyboard.type("Old story 3");

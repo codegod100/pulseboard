@@ -198,7 +198,15 @@ void Reader::open(int row) {
     }
 }
 
-void Reader::hoverLink(const QString &url) { platform::hoverLink(url); }
+void Reader::hoverLink(const QString &url) {
+    m_hoverUrl = url;
+    platform::hoverLink(url);
+}
+
+void Reader::leaveLink(const QString &url) {
+    if (m_hoverUrl != url) return;   // another row has the pointer already
+    hoverLink(QString());
+}
 
 void Reader::markAllRead() {
     const QByteArray body = m_sel >= 0 ? Api::form({{"feed", m_selUrl}}) : QByteArray("");
