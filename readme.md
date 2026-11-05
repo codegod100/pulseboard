@@ -30,7 +30,7 @@ Storage is Postgres on [Neon](https://neon.tech); the schema
 whole setup:
 
 ```
-just cloud
+just deploy
 ```
 
 There is nothing to paste: every sign-in happens in the browser. It pulls
@@ -43,7 +43,7 @@ FastAPI Cloud (signing you in there the first time), stores the string on the
 app as the secret `DATABASE_URL`, and deploys again so the app picks it up.
 It needs Node (for `npx neonctl` and `npx wrangler`), pixi and uv.
 
-Later deploys are `just deploy-cloud`. To copy D1 into Neon on its own:
+Later deploys can use `just redeploy` (pull, test, deploy, no questions). To copy D1 into Neon on its own:
 `DATABASE_URL=… just migrate-d1` (wrangler signs in to Cloudflare if needed;
 it is safe to run again, and sessions are not copied, so you sign in once on
 the new address).

@@ -1,18 +1,10 @@
-# Pull main, then test, migrate and deploy the Worker.
-deploy:
-    pixi run deploy
-
-# Pull main, test, then deploy the server to FastAPI Cloud.
-deploy-cloud:
-    pixi run deploy-cloud
-
 # Set up FastAPI Cloud with Neon and deploy, start to finish. Every sign-in
 # happens in the browser: Neon (to look up the database's pooled connection
 # string of the "pulseboard" project, creating it if needed), Cloudflare (only
 # if you copy the D1 data across) and FastAPI Cloud. The string is stored on
 # the app as the DATABASE_URL secret. Safe to run again. NEON_PROJECT (a name)
 # or NEON_PROJECT_ID uses another Neon project.
-cloud:
+deploy:
     #!/usr/bin/env bash
     set -euo pipefail
     neon() { npx --yes neonctl@8 --no-analytics "$@"; }
@@ -54,3 +46,7 @@ cloud:
 # Copy the existing data from Cloudflare D1 into Neon (DATABASE_URL). Safe to run again.
 migrate-d1:
     pixi run migrate-d1
+
+# Quick redeploy once `just deploy` has set things up: pull main, test, deploy.
+redeploy:
+    pixi run redeploy

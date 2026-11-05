@@ -1,6 +1,6 @@
 [workspace]
 name = "pulseboard"
-description = "An RSS reader on Cloudflare: a Python Worker and a Qt for WebAssembly web client"
+description = "An RSS reader: a FastAPI server (on FastAPI Cloud, with Neon) and a Qt for WebAssembly web client"
 channels = ["https://conda.anaconda.org/conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
@@ -28,18 +28,7 @@ test = { depends-on = ["test-worker", "test-pyodide"], description = "Run every 
 web-toolchain = { cmd = "bash web/toolchain.sh", description = "Set up Emscripten and Qt for WebAssembly in web/.qt (once; about a minute)" }
 build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from web/src and web/qml with Qt for WebAssembly" }
 
-# --- FastAPI Cloud (the server in main.py; see readme) ---
+# --- FastAPI Cloud (the server in main.py; `just deploy` sets it up) ---
 serve = { cmd = "uv run --frozen fastapi dev", description = "Run the server locally against a local SQLite file, with reload" }
-deploy-cloud = { cmd = "git pull --ff-only && pixi run test-worker && uv run --frozen fastapi deploy", description = "Pull main, test, then deploy to FastAPI Cloud (signs in through the browser the first time)" }
+redeploy = { cmd = "git pull --ff-only && pixi run test-worker && uv run --frozen fastapi deploy", description = "Pull main, test, then deploy to FastAPI Cloud (signs in through the browser the first time)" }
 migrate-d1 = { cmd = "python scripts/d1_to_postgres.py --d1 pulseboard", cwd = "worker", description = "Copy feeds, subscriptions, articles and read state from Cloudflare D1 into DATABASE_URL (Neon)" }
-
-# --- Cloudflare (run `pixi run login` once) ---
-# dev and deploy go through pywrangler, which vendors the Workers Python SDK
-# into worker/python_modules before handing over to wrangler.
-login = { cmd = "npx --yes wrangler@4 login", cwd = "worker", description = "Sign wrangler in to Cloudflare" }
-db-create = { cmd = "npx --yes wrangler@4 d1 create pulseboard", cwd = "worker", description = "Create the D1 database (first time only); put the printed id in worker/wrangler.toml" }
-migrate = { cmd = "npx --yes wrangler@4 d1 migrations apply pulseboard --remote", cwd = "worker", description = "Apply D1 migrations to the live database" }
-import-modal = { cmd = "mkdir -p .import && uvx modal volume get --force pulseboard-data db/pulseboard_articles .import/pulseboard_articles && python scripts/import_modal.py .import/pulseboard_articles > .import/import.sql && npx --yes wrangler@4 d1 execute pulseboard --remote --file .import/import.sql", cwd = "worker", depends-on = ["migrate"], description = "Copy feeds, subscriptions and read state from the old Modal volume into D1 (needs `uvx modal token new` once)" }
-dev = { cmd = "uvx --from 'workers-py>=1.17' pywrangler dev", cwd = "worker", description = "Run the Worker locally against a local D1" }
-ship = { cmd = "uvx --from 'workers-py>=1.17' pywrangler deploy", cwd = "worker", depends-on = ["test", "migrate"], description = "Test, migrate, then deploy the Worker as checked out" }
-deploy = { cmd = "git pull --ff-only && pixi run ship", description = "Pull main, then test, migrate and deploy the Worker" }

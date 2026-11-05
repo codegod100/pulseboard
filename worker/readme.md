@@ -77,20 +77,11 @@ the Pyodide CDN.
 
 ## Deploying
 
-The toolchain (Python, Node, pytest) comes from the [pixi](https://pixi.sh)
-manifest at the repository root; wrangler runs through `npx`.
-
-```
-pixi run login          # once: sign wrangler in to Cloudflare
-pixi run db-create      # once: prints database_id; put it in wrangler.toml
-just deploy             # git pull, tests, D1 migrations, then wrangler deploy (same as `pixi run deploy`)
-pixi run dev            # local Worker with a local D1
-```
-
-The [Deploy workflow](../.github/workflows/deploy.yml) does the same on every
-push to `main` when the repository has `CLOUDFLARE_API_TOKEN` (the "Edit
-Cloudflare Workers" template plus D1 Edit) and `CLOUDFLARE_ACCOUNT_ID` Actions
-secrets; without them it runs the tests and skips the deploy.
+Pulseboard deploys to FastAPI Cloud now: `just deploy` from the repository
+root (see the [readme](../readme.md)). The Worker entry point and its Pyodide
+test are kept so the code still runs on Cloudflare, but there are no
+Cloudflare deploy tasks any more. `just migrate-d1` copies the old D1 data
+into Neon.
 
 ## Limits worth knowing
 
@@ -102,6 +93,6 @@ one request fetches at most 40 feeds; the cron trigger picks up the rest.
 Each feed's last error is kept on the feed (`error` in `/feeds`):
 
 ```
-npx wrangler@4 d1 execute pulseboard --remote --command \
+psql "$DATABASE_URL" -c \
   "SELECT feed_url, error_count, last_error FROM feeds WHERE last_error IS NOT NULL"
 ```

@@ -44,57 +44,6 @@ jobs:
       - name: Test
         run: pixi run --locked test
 
-  deploy:
-    name: Deploy to Cloudflare
-    needs: test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    environment: production
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-    steps:
-      - name: Check deployment credentials
-        id: creds
-        # Without the secrets the Worker is deployed by hand with
-        # `pixi run deploy`, so this is a skip, not a failure.
-        run: |
-          if [[ -z "$CLOUDFLARE_API_TOKEN" || -z "$CLOUDFLARE_ACCOUNT_ID" ]]; then
-            echo "::notice::No CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID secrets; skipping deploy."
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: actions/checkout@v6
-        if: steps.creds.outputs.ready == 'true'
-
-      - name: Install pixi
-        if: steps.creds.outputs.ready == 'true'
-        run: |
-          curl -fsSL https://pixi.sh/install.sh | bash
-          echo "$HOME/.pixi/bin" >> "$GITHUB_PATH"
-
-      - name: Find or create the D1 database
-        if: steps.creds.outputs.ready == 'true'
-        # The id is account-specific. If wrangler.toml still has the
-        # placeholder, look it up (creating the database if needed).
-        working-directory: worker
-        run: |
-          if grep -q 00000000-0000-0000-0000-000000000000 wrangler.toml; then
-            list() { pixi run --locked npx --yes wrangler@4 d1 list --json | jq -r '.[] | select(.name == "pulseboard") | .uuid'; }
-            id=$(list)
-            if [[ -z "$id" ]]; then
-              pixi run --locked db-create
-              id=$(list)
-            fi
-            sed -i "s/00000000-0000-0000-0000-000000000000/$id/" wrangler.toml
-          fi
-
-      - name: Deploy
-        if: steps.creds.outputs.ready == 'true'
-        run: pixi run --locked deploy
-
   deploy-fastapi-cloud:
     name: Deploy to FastAPI Cloud
     needs: test
@@ -108,7 +57,7 @@ jobs:
       - name: Check deployment credentials
         id: creds
         # Without the secrets the server is deployed by hand with
-        # `just deploy-cloud`, so this is a skip, not a failure.
+        # `just deploy`, so this is a skip, not a failure.
         run: |
           if [[ -z "$FASTAPI_CLOUD_TOKEN" || -z "$FASTAPI_CLOUD_APP_ID" ]]; then
             echo "::notice::No FASTAPI_CLOUD_TOKEN / FASTAPI_CLOUD_APP_ID secrets; skipping deploy."
