@@ -25,7 +25,7 @@ test-pyodide = { cmd = "npm ci --silent && npm test", cwd = "worker/tests/pyodid
 test = { depends-on = ["test-worker", "test-pyodide"], description = "Run every Worker test" }
 
 # --- web client ---
-web-toolchain = { cmd = "bash web/toolchain.sh", description = "Set up Emscripten and Qt for WebAssembly in web/.qt (once; compiles Qt)" }
+web-toolchain = { cmd = "bash web/toolchain.sh", description = "Set up Emscripten and Qt for WebAssembly in web/.qt (once; about a minute)" }
 build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from web/src and web/qml with Qt for WebAssembly" }
 
 # --- FastAPI Cloud (the server in main.py; see readme) ---

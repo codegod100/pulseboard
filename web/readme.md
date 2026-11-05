@@ -23,11 +23,11 @@ Quick scene drawn into one canvas.
 ./build.sh       # compiles into dist/
 ```
 
-`toolchain.sh` compiles Qt for WebAssembly from Ubuntu's copies of the Qt
-source releases (about an hour on four cores), because a prebuilt one only
-comes from the Qt installer. If you already have Qt 6.10 for wasm and a
-matching emsdk, lay them out as `emsdk/`, `host/` and `wasm/` in one
-directory and point `PB_TOOLCHAIN` at it.
+`toolchain.sh` fetches the official prebuilt Qt for WebAssembly and the host
+Qt it needs (via aqtinstall, run with `uvx`) plus the matching Emscripten, in
+about a minute. If you already have them, lay them out as `emsdk/` and
+`qt/6.10.2/{wasm_singlethread,gcc_64}` in one directory and point
+`PB_TOOLCHAIN` at it.
 
 ## Testing
 
