@@ -162,7 +162,10 @@ Item {
             opacity: Reader.listState === Reader.Loading ? 0.6 : 1
             Behavior on opacity { NumberAnimation { duration: 200 } }
             boundsBehavior: Flickable.StopAtBounds
+            reuseItems: true
+            cacheBuffer: 1200
             delegate: ArticleRow {}
+            WheelScroll { flick: list }
             Connections {
                 target: Reader.articles
                 function onModelReset() { list.positionViewAtBeginning() }

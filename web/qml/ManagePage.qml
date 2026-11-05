@@ -41,6 +41,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: Reader.feedFilter
+        WheelScroll { flick: list }
         readonly property real colWidth: Math.min(760, width) - 32
         readonly property real colX: (width - Math.min(760, width)) / 2 + 16
 

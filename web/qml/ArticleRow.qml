@@ -39,6 +39,7 @@ Item {
         onContainsMouseChanged: Reader.hoverLink(containsMouse && root.hasLink ? root.url : "")
         Component.onDestruction: if (containsMouse) Reader.hoverLink("")
     }
+    ListView.onPooled: if (area.containsMouse) Reader.hoverLink("")
     Column {
         id: content
         x: root.width < 860 ? 16 : 20

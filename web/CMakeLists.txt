@@ -37,6 +37,7 @@ qt_add_qml_module(pulseboard
         qml/ScrollBar.qml
         qml/Spinner.qml
         qml/Tabs.qml
+        qml/WheelScroll.qml
 )
 
 target_include_directories(pulseboard PRIVATE src)

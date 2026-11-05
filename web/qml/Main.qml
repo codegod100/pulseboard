@@ -107,6 +107,7 @@ Window {
                 clip: true
                 contentHeight: opml.contentHeight
                 boundsBehavior: Flickable.StopAtBounds
+                WheelScroll { flick: opmlFlick }
                 TextEdit {
                     id: opml
                     width: opmlFlick.width
