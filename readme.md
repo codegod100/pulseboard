@@ -5,7 +5,7 @@ An RSS reader on Cloudflare. Two pieces, one Worker:
 | | |
 |---|---|
 | [`worker`](worker) | the reader: a Python Worker serving a small JSON API, with D1 for storage |
-| [`web`](web) | the web client, an [ultra](https://github.com/codegod100/ultra) app (LPython compiled to wasm) |
+| [`web`](web) | the web client, a Qt Quick app (C++ and QML) built with Qt for WebAssembly |
 
 The Worker serves the client's build (`web/dist`) as static assets, so the API
 and the page share an origin and there is no CORS to arrange. A cron trigger

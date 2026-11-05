@@ -14,94 +14,40 @@
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
   <title>Pulseboard</title>
-  <link rel="stylesheet" href="ui.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app"></div>
+  <!-- The whole app is a Qt Quick scene drawn into this element. -->
+  <div id="screen"></div>
+  <div id="splash" role="status" aria-label="Loading Pulseboard">
+    <div class="spinner"></div>
+    <p id="splash-error" hidden></p>
+  </div>
+
+  <script src="qtloader.js"></script>
+  <script src="pulseboard.js"></script>
   <script type="module">
-    import { mount } from "./ultra.js";
-
-    // Pulseboard's own imports for app.py (see the @jscall block there).
-    const imports = ({ str, strs, vals, dispatch }) => {
-      const at = (h, path) => {
-        let v = vals[h];
-        const p = str(path);
-        if (p) for (const k of p.split(".")) { if (v == null) return undefined; v = v[k]; }
-        return v;
-      };
-      const parser = new DOMParser();
-      // The start of some HTML as plain text, for a two-line preview. Long-form
-      // feeds put whole posts in the summary, so only the first few KB are read.
-      const preview = (html) => {
-        const doc = parser.parseFromString(html.slice(0, 4000), "text/html");
-        const t = (doc.body.textContent || "").replace(/\s+/g, " ").trim();
-        return t.length > 400 ? t.slice(0, 400) : t;
-      };
-      // Compact relative time ("3h", "2d") for the metadata line.
-      const ago = (iso) => {
-        const t = Date.parse(iso);
-        if (Number.isNaN(t)) return "";
-        const m = Math.floor((Date.now() - t) / 60000);
-        if (m < 1) return "now";
-        if (m < 60) return m + "m";
-        const h = Math.floor(m / 60);
-        if (h < 24) return h + "h";
-        const d = Math.floor(h / 24);
-        if (d < 30) return d + "d";
-        if (d < 365) return Math.floor(d / 30) + "mo";
-        return Math.floor(d / 365) + "y";
-      };
-      const isLink = (s) => {
-        try { const u = new URL(s); return u.protocol === "http:" || u.protocol === "https:"; }
-        catch { return false; }
-      };
-
-      return {
-        // Same origin, so the session cookie rides along. A 401 means the
-        // session is gone: the reader's login page sets a new one and comes
-        // back here.
-        api: (method, url, body, msg) => {
-          const h = vals.push(null) - 1;
-          const init = { method: str(method), headers: { accept: "application/json" } };
-          if (body > 0) {
-            init.body = strs[body];
-            init.headers["content-type"] = "application/x-www-form-urlencoded";
-          }
-          fetch(strs[url], init)
-            .then(async (r) => {
-              if (r.status === 401) { location.assign("/auth/login"); return false; }
-              const raw = await r.text();
-              let v = raw;
-              if ((r.headers.get("content-type") || "").includes("json")) {
-                try { v = raw ? JSON.parse(raw) : {}; } catch { v = { __error: "Unexpected response from server." }; }
-              }
-              if (v && typeof v === "object" && v.error != null) v = { __error: String(v.error) };
-              else if (!r.ok) v = { __error: `Request failed (${r.status}).` };
-              vals[h] = v;
-              return true;
-            })
-            .catch(() => { vals[h] = { __error: "Could not reach the reader." }; return true; })
-            .then((ok) => { if (ok) dispatch(msg, h); });
-          return h;
-        },
-        s_add_enc: (h, src) => { strs[h] += encodeURIComponent(strs[src] ?? ""); },
-        j_fmt: (h, path, kind, dst) => {
-          const v = at(h, path);
-          const s = typeof v === "string" ? v : v == null ? "" : String(v);
-          let out = "";
-          if (kind === 0) out = preview(s);
-          else if (kind === 1) out = s ? ago(s) : "";
-          else if (kind === 2) out = (s.trim()[0] || "?").toUpperCase();
-          else if (kind === 3) { strs[dst] = s; return isLink(s) ? 1 : 0; }
-          strs[dst] = out;
-          return out ? 1 : 0;
-        },
-        copy_text: (h) => { navigator.clipboard?.writeText(strs[h] ?? "").catch(() => {}); },
-      };
+    const screen = document.getElementById("screen");
+    const splash = document.getElementById("splash");
+    const fail = (msg) => {
+      const p = document.getElementById("splash-error");
+      p.textContent = msg;
+      p.hidden = false;
+      splash.querySelector(".spinner").hidden = true;
     };
-
-    mount("#app", "./app.wasm", { imports });
+    try {
+      // The browser test reaches the app's state through this.
+      window.pulseboard = await qtLoad({
+        qt: {
+          containerElements: [screen],
+          entryFunction: window.pulseboard_entry,
+          onLoaded: () => splash.remove(),
+          onExit: (e) => { if (e.code !== 0) fail("Pulseboard stopped (" + (e.text ?? e.code) + ")."); },
+        },
+      });
+    } catch (e) {
+      fail("Pulseboard couldn't start: " + e);
+    }
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/pulseboard_service_worker.js").catch(() => {});

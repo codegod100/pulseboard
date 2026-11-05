@@ -1,18 +1,43 @@
 # Web client
 
-Pulseboard's browser app, written with [ultra](https://github.com/codegod100/ultra):
-LPython compiled to WebAssembly, with an Elm-style update/view loop.
+Pulseboard's browser app: C++ and QML, built with
+[Qt for WebAssembly](https://doc.qt.io/qt-6/wasm.html). The whole UI is a Qt
+Quick scene drawn into one canvas.
 
-- `app.py` is the whole app: model, `update()`, `view()`.
-- `static/` holds the page (`index.html`, with the app's own JS imports for
-  requests and formatting), the stylesheet and the PWA files.
+- `src/` is the C++: `reader.*` holds the state and every action, `api.*`
+  talks to the reader's JSON API, `models.*` are the feed and article lists
+  the views draw, and `platform.*` is the little it asks of the browser
+  (opening a tab, the clipboard, the sign-in redirect).
+- `qml/` is the look: the article list (`ReaderPage`), Manage feeds
+  (`ManagePage`), the dialogs and toast (`Main`), and small components. Icons
+  are lucide's SVG paths drawn with Qt Quick Shapes.
+- `static/` holds the page that loads the app (`index.html`), its stylesheet
+  and the PWA files.
 - `dist/` is the build output, committed, which the Worker serves as static
   assets from the same origin as the API.
 
-Build with `./build.sh` (needs [pixi](https://pixi.sh); it fetches ultra at a
-pinned commit into `.ultra/`). Test in a browser against a stand-in API:
+## Building
+
+```sh
+./toolchain.sh   # once: Emscripten 4.0.7 and Qt 6.10.2 for wasm, into .qt/
+./build.sh       # compiles into dist/
+```
+
+`toolchain.sh` compiles Qt for WebAssembly from Ubuntu's copies of the Qt
+source releases (about an hour on four cores), because a prebuilt one only
+comes from the Qt installer. If you already have Qt 6.10 for wasm and a
+matching emsdk, lay them out as `emsdk/`, `host/` and `wasm/` in one
+directory and point `PB_TOOLCHAIN` at it.
+
+## Testing
+
+Against a stand-in API, in a browser:
 
 ```sh
 python3 test/mock_server.py 8765 &
 BASE=http://127.0.0.1:8765 node test/e2e.cjs   # needs playwright
 ```
+
+The canvas has no DOM to query, so the test reads the app's state through
+`pbSnapshot()` and calls its actions through `pbCall()` (both exported from
+`src/main.cpp`), and clicks and types into the real UI where it can.

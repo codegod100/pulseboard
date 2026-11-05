@@ -3,7 +3,7 @@ which one is behind them.
 
 This module knows nothing about Workers: `handle` takes a `Req` and returns a
 `Resp`, and entry.py converts both ways. A `Resp` with `asset` set means "serve
-this path from the static assets" (the ultra web client).
+this path from the static assets" (the Qt web client).
 """
 
 import asyncio

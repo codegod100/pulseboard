@@ -1,6 +1,6 @@
 # The reader, as a Cloudflare Python Worker
 
-One Worker serves the JSON API, the AT Protocol sign-in, and the ultra web
+One Worker serves the JSON API, the AT Protocol sign-in, and the Qt web
 client (static assets from `../web/dist`). Storage is D1. A cron trigger
 refreshes due feeds every 30 minutes, so the reader is current before it is
 opened.

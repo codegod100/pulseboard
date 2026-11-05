@@ -1,6 +1,6 @@
 [workspace]
 name = "pulseboard"
-description = "An RSS reader on Cloudflare: a Python Worker and an ultra web client"
+description = "An RSS reader on Cloudflare: a Python Worker and a Qt for WebAssembly web client"
 channels = ["https://conda.anaconda.org/conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
@@ -18,7 +18,8 @@ test-pyodide = { cmd = "npm ci --silent && npm test", cwd = "worker/tests/pyodid
 test = { depends-on = ["test-worker", "test-pyodide"], description = "Run every Worker test" }
 
 # --- web client ---
-build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from web/app.py with ultra" }
+web-toolchain = { cmd = "bash web/toolchain.sh", description = "Set up Emscripten and Qt for WebAssembly in web/.qt (once; compiles Qt)" }
+build-web = { cmd = "bash web/build.sh", description = "Rebuild web/dist from web/src and web/qml with Qt for WebAssembly" }
 
 # --- Cloudflare (run `pixi run login` once) ---
 # dev and deploy go through pywrangler, which vendors the Workers Python SDK

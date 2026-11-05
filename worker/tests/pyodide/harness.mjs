@@ -78,7 +78,7 @@ async def call(method, path, body=None, cookie=None, ctype="application/x-www-fo
 
 s, b, h = await call("GET", "/")
 assert s == 307 and h.get("location") == "/auth/login", (s, b)
-s, b, h = await call("GET", "/app.wasm"); assert (s, b) == (200, "asset:/app.wasm"), (s, b)
+s, b, h = await call("GET", "/pulseboard.wasm"); assert (s, b) == (200, "asset:/pulseboard.wasm"), (s, b)
 s, b, h = await call("GET", "/feeds"); assert s == 401
 s, b, h = await call("GET", "/oauth-client-metadata.json")
 assert json.loads(b)["client_id"] == O + "/oauth-client-metadata.json"

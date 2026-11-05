@@ -114,7 +114,7 @@ def test_unauthenticated(db):
     app = App(db, http, SoftCrypto())
     assert run(app.handle(req("GET", "/"))).headers["Location"] == "/auth/login"
     assert run(app.handle(req("GET", "feeds"))).status == 401
-    assert run(app.handle(req("GET", "app.wasm"))).asset == "/app.wasm"
+    assert run(app.handle(req("GET", "pulseboard.wasm"))).asset == "/pulseboard.wasm"
     assert run(app.handle(req("GET", "health"))).status == 200
     meta = json.loads(run(app.handle(req("GET", "oauth-client-metadata.json"))).body)
     assert meta["redirect_uris"] == [f"{ORIGIN}/auth/callback"]

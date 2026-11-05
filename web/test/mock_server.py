@@ -61,6 +61,7 @@ class H(SimpleHTTPRequestHandler):
         self.send_header("content-length", str(len(b)))
         self.end_headers()
         self.wfile.write(b)
+        return True
 
     def form(self):
         n = int(self.headers.get("content-length") or 0)

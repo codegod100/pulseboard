@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
 # Build the web client into web/dist/, which the Worker serves as static assets.
 #
-# Needs pixi (https://pixi.sh). The ultra toolchain (LPython 0.22) comes from a
-# checkout of codegod100/ultra at the pinned commit, kept in web/.ultra, or
-# from $ULTRA if set.
+# Needs Qt 6.10 for WebAssembly and Emscripten 4.0.7: run ./toolchain.sh once
+# to put both in web/.qt, or point PB_TOOLCHAIN at a copy made elsewhere.
 set -euo pipefail
 cd "$(dirname "$0")"
+# shellcheck source=/dev/null
+. ./toolchain-env.sh
 
-ULTRA_REPO=https://github.com/codegod100/ultra
-ULTRA_REV=265c0d40073161230b18ce9499e378924eaa2caf
-ULTRA=${ULTRA:-$PWD/.ultra}
+if [ ! -x "$QT_WASM/bin/qt-cmake" ]; then
+  echo "No Qt for WebAssembly in $QT_WASM: run ./toolchain.sh first." >&2
+  exit 1
+fi
 
-if [ ! -d "$ULTRA/.git" ]; then
-  git clone --quiet "$ULTRA_REPO" "$ULTRA"
-fi
-if [ "${ULTRA_PIN:-1}" = 1 ]; then
-  git -C "$ULTRA" fetch --quiet origin "$ULTRA_REV" 2>/dev/null || true
-  git -C "$ULTRA" checkout --quiet "$ULTRA_REV"
-fi
+B=${BUILD_DIR:-$PWD/.build}
+"$QT_WASM/bin/qt-cmake" -S . -B "$B" -G Ninja -DCMAKE_BUILD_TYPE=MinSizeRel
+cmake --build "$B"
 
 rm -rf dist
 mkdir -p dist
 cp -R static/. dist/
-# compiles app.py, and copies ultra.js and ui.css next to app.wasm
-pixi run --manifest-path "$ULTRA/pixi.toml" python "$ULTRA/tools/ultra.py" build "$PWD/app.py" -o "$PWD/dist/app.wasm"
+cp "$B/pulseboard.js" "$B/pulseboard.wasm" "$B/qtloader.js" dist/
+echo "dist/: $(du -sh dist | cut -f1), pulseboard.wasm $(du -h dist/pulseboard.wasm | cut -f1)"

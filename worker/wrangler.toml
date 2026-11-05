@@ -1,4 +1,4 @@
-# Pulseboard on Cloudflare: a Python Worker serving the JSON API and the ultra
+# Pulseboard on Cloudflare: a Python Worker serving the JSON API and the Qt
 # web client (static assets from ../web/dist), with D1 for storage.
 name = "pulseboard"
 main = "src/entry.py"
