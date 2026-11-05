@@ -11,6 +11,12 @@ EM_JS(void, pb_copy_text, (const char *s), {
     if (navigator.clipboard) navigator.clipboard.writeText(t).catch(() => {});
 });
 
+// index.html gives the <a> around the canvas this link while the pointer is on
+// it, so a right click gets the browser's own menu: open in new tab, copy link.
+EM_JS(void, pb_hover_link, (const char *s), {
+    if (window.pbHoverLinkChanged) window.pbHoverLinkChanged(UTF8ToString(s));
+});
+
 namespace platform {
 QUrl origin() {
     return QUrl(QString::fromStdString(val::global("location")["origin"].as<std::string>()) + "/");
@@ -23,6 +29,7 @@ void openUrl(const QString &url) {
                                     std::string("noopener"));
 }
 void copyText(const QString &text) { pb_copy_text(text.toUtf8().constData()); }
+void hoverLink(const QString &url) { pb_hover_link(url.toUtf8().constData()); }
 }
 
 #else  // a desktop build, for working on the UI without a browser
@@ -41,5 +48,6 @@ void navigate(const QString &path) {
 }
 void openUrl(const QString &url) { QDesktopServices::openUrl(QUrl(url)); }
 void copyText(const QString &text) { QGuiApplication::clipboard()->setText(text); }
+void hoverLink(const QString &) {}
 }
 #endif

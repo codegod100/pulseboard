@@ -198,6 +198,8 @@ void Reader::open(int row) {
     }
 }
 
+void Reader::hoverLink(const QString &url) { platform::hoverLink(url); }
+
 void Reader::markAllRead() {
     const QByteArray body = m_sel >= 0 ? Api::form({{"feed", m_selUrl}}) : QByteArray("");
     m_api.post("/read-all", body, [this](const ApiResult &r) {
@@ -335,7 +337,7 @@ QString Reader::snapshot() const {
     for (int i = 0; i < m_articles.size(); ++i) {
         Article &a = const_cast<ArticleModel &>(m_articles).at(i);
         arts.append(QJsonObject{{"id", a.id}, {"title", a.title}, {"preview", a.preview},
-                                {"ago", a.ago}, {"read", a.read}, {"hasLink", a.hasLink},
+                                {"ago", a.ago}, {"read", a.read}, {"hasLink", a.hasLink}, {"url", a.url},
                                 {"newLine", a.newLine}, {"feedTitle", a.feedTitle}});
     }
     QJsonArray feeds;

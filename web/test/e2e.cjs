@@ -76,6 +76,22 @@ const SHOTS = process.env.SHOTS;
     await until((s) => !s.articles[0].read && s.unread === before.unread, "row 0 unread again");
   });
 
+  await step("a right click on a row gets the browser's link menu for its link", async () => {
+    const s = await state();
+    const y = 56 + 12 + 36 + 12 + 1 + 50;   // the first row, as above
+    await page.mouse.move(300, y);
+    await page.waitForFunction((u) => window.pbHoverLink === u, s.articles[0].url, { timeout: 5000 });
+    const hit = page.evaluate(() => new Promise((ok) => window.addEventListener("contextmenu", (e) =>
+      setTimeout(() => ok({ href: e.target.closest("a")?.href ?? null, prevented: e.defaultPrevented })),
+      { once: true, capture: true })));
+    await page.mouse.click(300, y, { button: "right" });
+    const r = await hit;
+    assert.deepStrictEqual(r, { href: s.articles[0].url, prevented: false });
+    await page.mouse.move(300, 20);
+    await page.waitForFunction(() => !document.getElementById("screen-link").hasAttribute("href"), null, { timeout: 5000 });
+    assert.strictEqual(page.url(), BASE + "/", "the link around the canvas must not navigate");
+  });
+
   await step("typing in the search box and pressing Enter searches", async () => {
     await page.mouse.click(200, 56 + 12 + 18);
     await page.keyboard.type("Old story 3");

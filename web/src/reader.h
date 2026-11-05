@@ -62,6 +62,7 @@ public:
     Q_INVOKABLE void clearSearch() { applySearch({}); }
     Q_INVOKABLE void toggleRead(int row);
     Q_INVOKABLE void open(int row);               // follow the link, mark it read
+    Q_INVOKABLE void hoverLink(const QString &url); // the link under the pointer, "" for none
     Q_INVOKABLE void markAllRead();               // the feed shown, or everything
     Q_INVOKABLE void retry();
 

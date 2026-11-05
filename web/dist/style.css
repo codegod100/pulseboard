@@ -13,3 +13,5 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: light-dark(#
   animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* Gives the canvas the link under the pointer, for the browser's link menu. */
+#screen-link { display: block; color: inherit; -webkit-user-drag: none; -webkit-touch-callout: default; }

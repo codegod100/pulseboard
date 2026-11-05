@@ -1,4 +1,5 @@
-// One article: source, age, title and preview; a click opens it in a new tab.
+// One article: source, age, title and preview; a click (left or middle) opens it
+// in a new tab, and a right click gets the browser's own link menu.
 import QtQuick
 import Pulseboard
 
@@ -33,7 +34,10 @@ Item {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         onClicked: Reader.open(root.index)
+        onContainsMouseChanged: Reader.hoverLink(containsMouse && root.hasLink ? root.url : "")
+        Component.onDestruction: if (containsMouse) Reader.hoverLink("")
     }
     Column {
         id: content

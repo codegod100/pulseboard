@@ -9,4 +9,5 @@ QUrl origin();                       // where the reader is: the page's own orig
 void navigate(const QString &path);  // leave the app for another page
 void openUrl(const QString &url);    // a new tab, as a link with target=_blank would
 void copyText(const QString &text);  // to the clipboard
+void hoverLink(const QString &url);  // the link under the pointer, for the browser's own link menu; "" for none
 }

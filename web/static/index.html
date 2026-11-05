@@ -18,7 +18,7 @@
 </head>
 <body>
   <!-- The whole app is a Qt Quick scene drawn into this element. -->
-  <div id="screen"></div>
+  <a id="screen-link" draggable="false" tabindex="-1"><div id="screen"></div></a>
   <div id="splash" role="status" aria-label="Loading Pulseboard">
     <div class="spinner"></div>
     <p id="splash-error" hidden></p>
@@ -35,6 +35,23 @@
       p.hidden = false;
       splash.querySelector(".spinner").hidden = true;
     };
+    // The app is drawn on a canvas, so the browser has no links to offer a menu
+    // for. While the pointer is over an article the app hands us its link, and
+    // the <a> around the canvas takes it as its href: a right click (or a long
+    // press) then gets the browser's own link menu, with open in new tab and
+    // copy link. Clicks stay the app's: it opens the tab itself.
+    const link = document.getElementById("screen-link");
+    window.pbHoverLinkChanged = (url) => {
+      window.pbHoverLink = url;
+      if (url) link.href = url;
+      else link.removeAttribute("href");
+    };
+    // Qt cancels the menu on its canvas; keep the event from reaching it.
+    window.addEventListener("contextmenu", (e) => { if (link.href) e.stopPropagation(); }, true);
+    for (const type of ["click", "auxclick", "dragstart"]) {
+      window.addEventListener(type, (e) => { if (link.contains(e.target)) e.preventDefault(); }, true);
+    }
+
     try {
       // The browser test reaches the app's state through this.
       window.pulseboard = await qtLoad({
