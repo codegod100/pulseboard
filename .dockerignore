@@ -1,0 +1,7 @@
+# Only server/ and web/dist go into the Fly image (server/Dockerfile).
+*
+!server/
+!web/dist/
+server/build/
+server/.pixi/
+server/tests/__pycache__/

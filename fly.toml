@@ -1,0 +1,37 @@
+# Pulseboard on Fly.io: the Qt server (server/) under `wasmtime serve`, with
+# Neon for storage. One always-on machine, which also runs the 30-minute feed
+# refresh. Set the database with:
+#   fly secrets set DATABASE_URL='postgresql://…'   (Neon's connection string)
+# See server/README.md.
+app = "pulseboard"
+primary_region = "iad"
+
+[build]
+  dockerfile = "server/Dockerfile"
+
+[env]
+  REFRESH_EVERY_MINUTES = "30"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # The refresh loop lives on the machine, so keep one running.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

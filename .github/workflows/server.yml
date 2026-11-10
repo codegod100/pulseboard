@@ -1,0 +1,72 @@
+name: Server
+
+# The Qt server (server/): build the component and run its tests on every
+# push; on main, deploy to Fly.io once a FLY_API_TOKEN secret is set.
+on:
+  push:
+    paths:
+      - "server/**"
+      - "web/dist/**"
+      - "fly.toml"
+      - ".github/workflows/server.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulseboard-fly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Build and test the Qt server
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PULSEBOARD_TEST_POSTGRES: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pixi
+        run: |
+          curl -fsSL https://pixi.sh/install.sh | bash
+          echo "$HOME/.pixi/bin" >> "$GITHUB_PATH"
+      - name: Build and test
+        working-directory: server
+        run: pixi run -e test test
+
+  deploy:
+    name: Deploy to Fly.io
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - name: Check deployment credentials
+        id: creds
+        run: |
+          if [[ -z "$FLY_API_TOKEN" ]]; then
+            echo "::notice::No FLY_API_TOKEN secret; skipping the Fly deploy."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v6
+        if: steps.creds.outputs.ready == 'true'
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        if: steps.creds.outputs.ready == 'true'
+      - name: Deploy
+        if: steps.creds.outputs.ready == 'true'
+        run: flyctl deploy --remote-only

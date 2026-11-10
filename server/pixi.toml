@@ -1,0 +1,33 @@
+# The Qt server's toolchain: qt2wasm (Qt 6.8.3 for WASI, wasi-sdk, wit-bindgen,
+# wasm-tools, the preview1 adapter) and wasmtime, all prebuilt on
+# prefix.dev/nandi-testing (from nandi.uk/qt2wasm). linux-64 only.
+#   pixi run build        server/build/pulseboard-server.wasm
+#   pixi run serve        run it on :8080 (DATABASE_URL must be set)
+#   pixi run test         build, then the tests (a throwaway Postgres if
+#                         PULSEBOARD_TEST_POSTGRES is not set)
+[workspace]
+name = "pulseboard-server"
+channels = ["conda-forge", "https://prefix.dev/nandi-testing"]
+platforms = ["linux-64"]
+
+[dependencies]
+qt2wasm = { version = "0.3.*", channel = "https://prefix.dev/nandi-testing" }
+wasmtime = { version = "36.*", channel = "https://prefix.dev/nandi-testing" }
+
+[feature.test.dependencies]
+python = "3.13.*"
+pytest = "*"
+httpx = "*"
+psycopg = "*"
+cryptography = "*"
+postgresql = "*"
+
+[environments]
+test = ["test"]
+
+[tasks]
+build = { cmd = "qt2wasm build . --wit wit --world server -o build/pulseboard-server.wasm", inputs = ["src/**", "wit/**", "migrations/**", "CMakeLists.txt"], outputs = ["build/pulseboard-server.wasm"] }
+serve = { cmd = "bash fly/entrypoint.sh", depends-on = ["build"], env = { PULSEBOARD_COMPONENT = "build/pulseboard-server.wasm", PULSEBOARD_DIST = "../web/dist" } }
+
+[feature.test.tasks]
+test = { cmd = "bash tests/run.sh", depends-on = ["build"] }

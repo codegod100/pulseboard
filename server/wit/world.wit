@@ -1,0 +1,5 @@
+package pulseboard:server;
+
+world server {
+  include wasi:http/proxy@0.2.6;
+}

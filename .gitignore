@@ -54,3 +54,7 @@ worker/.import/
 # Qt toolchain (web/toolchain.sh)
 /.qt/
 aqtinstall.log
+
+# Qt server (server/): build output and its pixi env
+server/build/
+server/.pixi/

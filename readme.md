@@ -1,27 +1,22 @@
 # pulseboard
 
-An RSS reader. Two pieces:
+An RSS reader. Three pieces:
 
 | | |
 |---|---|
-| [`worker`](worker) | the reader: a FastAPI app serving a small JSON API |
+| [`server`](server) | the reader: a Qt 6 C++ server compiled to a WASI component with [qt2wasm](https://fileapi.fastapicloud.dev/forge/#nandi.uk/qt2wasm), run by `wasmtime serve` on [Fly.io](https://fly.io) with Postgres on [Neon](https://neon.tech) |
 | [`web`](web) | the web client, a Qt Quick app (C++ and QML) built with Qt for WebAssembly |
+| [`worker`](worker) | the previous reader, a FastAPI app (FastAPI Cloud, or a Cloudflare Python Worker with D1), which the Qt server replaces |
 
-The reader runs in either of two places, from the same routes
-(`worker/src/pulseboard/api.py`):
+The server serves the client's build (`web/dist`) itself, so the API and the
+page share an origin and there is no CORS to arrange, and due feeds are
+refreshed every 30 minutes. See [`server/README.md`](server/README.md) for how
+it is built, tested and deployed (`cd server && pixi run -e test test`, then
+`fly deploy` from here).
 
-- **FastAPI Cloud**, as an ordinary server (`main.py`, `pyproject.toml` here),
-  with Postgres on [Neon](https://neon.tech) for storage. See below.
-- **Cloudflare**, as a Python Worker with D1 for storage. See
-  [`worker/readme.md`](worker/readme.md).
-
-Either way the reader serves the client's build (`web/dist`) itself, so the
-API and the page share an origin and there is no CORS to arrange, and due
-feeds are refreshed every 30 minutes.
-
-Everything runs through [pixi](https://pixi.sh): `pixi run test`,
-`pixi run build-web`, `pixi run serve`. See
-[`worker/readme.md`](worker/readme.md) for the API and the tests.
+The rest of this file describes the Python server, which still works as
+before: `pixi run test`, `pixi run build-web`, `pixi run serve`. See
+[`worker/readme.md`](worker/readme.md) for the API and its tests.
 
 ## Deploying to FastAPI Cloud
 
