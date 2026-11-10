@@ -4,6 +4,11 @@
 # See server/README.md.
 cmake_minimum_required(VERSION 3.21)
 project(pulseboard_server C CXX)
+# Lets clangd (and other IDEs) find Qt/WASI headers: it reads compile_commands.json
+# for include paths, defines and the wasi_compat forced-include. The qt2wasm build
+# itself does not need it, but the compile database is what keeps the editor from
+# reporting "'QString' file not found" on every translation unit.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(${QT2WASM_ROOT}/cmake/Qt2Wasm.cmake)
 
 # The Postgres migrations, compiled in: migrations/*.sql -> migrations.inc.
