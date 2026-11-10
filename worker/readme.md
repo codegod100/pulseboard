@@ -77,7 +77,8 @@ the Pyodide CDN.
 
 ## Deploying
 
-Pulseboard deploys to FastAPI Cloud now: `just deploy` from the repository
+The Qt server in `server/` replaces this one on Fly (`just deploy`). This one
+still deploys to FastAPI Cloud with `just deploy-fastapi` from the repository
 root (see the [readme](../readme.md)). The Worker entry point and its Pyodide
 test are kept so the code still runs on Cloudflare, but there are no
 Cloudflare deploy tasks any more. `just migrate-d1` copies the old D1 data

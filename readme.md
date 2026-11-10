@@ -11,8 +11,14 @@ An RSS reader. Three pieces:
 The server serves the client's build (`web/dist`) itself, so the API and the
 page share an origin and there is no CORS to arrange, and due feeds are
 refreshed every 30 minutes. See [`server/README.md`](server/README.md) for how
-it is built, tested and deployed (`cd server && pixi run -e test test`, then
-`fly deploy` from here).
+it is built and tested (`cd server && pixi run -e test test`).
+
+To deploy it to Fly, run `just deploy` from here. It signs you in to Fly and
+Neon in the browser, creates the Fly app if needed (`FLY_APP=<name>` if
+`pulseboard` is taken), stores the Neon project's connection string on it as
+the `DATABASE_URL` secret, and deploys; Fly builds the image remotely, so it
+needs only Node (for `npx neonctl`) and pixi. `just redeploy` deploys again
+with no questions.
 
 The rest of this file describes the Python server, which still works as
 before: `pixi run test`, `pixi run build-web`, `pixi run serve`. See
@@ -25,7 +31,7 @@ Storage is Postgres on [Neon](https://neon.tech); the schema
 whole setup:
 
 ```
-just deploy
+just deploy-fastapi
 ```
 
 There is nothing to paste: every sign-in happens in the browser. It pulls
@@ -38,7 +44,7 @@ FastAPI Cloud (signing you in there the first time), stores the string on the
 app as the secret `DATABASE_URL`, and deploys again so the app picks it up.
 It needs Node (for `npx neonctl` and `npx wrangler`), pixi and uv.
 
-Later deploys can use `just redeploy` (pull, test, deploy, no questions). To copy D1 into Neon on its own:
+Later deploys can use `just redeploy-fastapi` (pull, test, deploy, no questions). To copy D1 into Neon on its own:
 `DATABASE_URL=… just migrate-d1` (wrangler signs in to Cloudflare if needed;
 it is safe to run again, and sessions are not copied, so you sign in once on
 the new address).

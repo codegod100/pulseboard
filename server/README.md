@@ -65,10 +65,12 @@ existing server instead of starting one.
 run it on one always-on machine.
 
 ```
-fly launch --no-deploy --copy-config      # once: creates the app (pick a name)
-fly secrets set DATABASE_URL='postgresql://…'
-fly deploy
+just deploy        # from the repository root: Fly app, Neon secret, deploy
+just redeploy      # later deploys
 ```
+
+By hand, that is `fly apps create <name>`, `fly secrets set
+DATABASE_URL='postgresql://…'` and `fly deploy --remote-only -a <name>`.
 
 | Environment variable | |
 |---|---|
