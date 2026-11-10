@@ -1,5 +1,5 @@
 # Signs in to Fly and Neon in the browser, creates the Fly app if it doesn't
-# exist (FLY_APP names it, default pulseboard), stores the Neon connection
+# exist (the name in fly.toml, or a free one written back there), stores the Neon connection
 # string on it as the DATABASE_URL secret, and deploys. Fly builds the image
 # remotely, so no Docker is needed. Safe to run again.
 #
@@ -14,10 +14,20 @@ deploy:
     fi
     fly() { flyctl "$@"; }
     fly auth whoami >/dev/null 2>&1 || fly auth login
-    app="${FLY_APP:-pulseboard}"
+    # The app is the one fly.toml names (FLY_APP overrides). Fly app names are
+    # global, so when that name belongs to someone else, a new one with a random
+    # suffix is created and written back to fly.toml, committed and pushed, so
+    # later deploys (and the GitHub workflow) use it.
+    app="${FLY_APP:-$(sed -n 's/^app *= *"\(.*\)"/\1/p' fly.toml)}"
     if ! fly status -a "$app" >/dev/null 2>&1; then
-      echo "Creating the Fly app $app (set FLY_APP if the name is taken)."
-      fly apps create "$app"
+      if ! fly apps create "$app" 2>/dev/null; then
+        app="pulseboard-$(od -An -N3 -tx1 /dev/urandom | tr -d " \n")"
+        echo "That name is taken on Fly; creating $app instead."
+        fly apps create "$app"
+        sed -i.bak "s/^app *= *\".*\"/app = \"$app\"/" fly.toml && rm fly.toml.bak
+        git commit -m "fly.toml: deploy as $app" fly.toml
+        git push
+      fi
     fi
     url=$({{just_executable()}} neon-url)
     fly secrets set --stage -a "$app" DATABASE_URL="$url"
@@ -27,7 +37,7 @@ deploy:
 # Redeploy the Qt server to Fly once `just deploy` has set it up.
 redeploy:
     git pull --ff-only
-    PATH="$HOME/.fly/bin:$PATH" flyctl deploy --remote-only -a "${FLY_APP:-pulseboard}"
+    PATH="$HOME/.fly/bin:$PATH" flyctl deploy --remote-only ${FLY_APP:+-a "$FLY_APP"}
 
 # Optionally copies the Cloudflare D1 data across first.
 #
