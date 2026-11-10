@@ -3,7 +3,7 @@
 # refresh. Set the database with:
 #   fly secrets set DATABASE_URL='postgresql://…'   (Neon's connection string)
 # See server/README.md.
-app = "pulseboard"
+app = "pulseboard-123e9d"
 primary_region = "iad"
 
 [build]
